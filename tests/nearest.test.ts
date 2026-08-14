@@ -87,12 +87,19 @@ describe("nearest bikeshare endpoint", () => {
       availableCount: 2,
     });
     expect(body.distanceMeters).toBe(0);
+    expect(body.spokenMessage).toContain("feet");
+    expect(body.spokenMessage).toContain("available");
+    expect(body.appleMapsPreviewUrl).toContain("maps.apple.com");
+    expect(body.googleMapsPreviewUrl).toContain("google.com/maps");
     expect(body.approximate).toBe(true);
     expect((body.topCandidates as unknown[]).length).toBe(5);
   });
 
   it("prefers the requested type before geometric distance", async () => {
-    const { body } = await responseJson(
+    const emptyBikes = clone(fixture("free_bike_status.json"));
+    (emptyBikes.data as JsonRecord).bikes = [];
+    const { body } = await handleRequestWithOverrides(
+      { "free_bike_status.json": emptyBikes },
       "https://worker.test/nearest?lat=37.7605&lon=-122.42&type=electric",
     );
 
@@ -165,6 +172,7 @@ describe("nearest bikeshare endpoint", () => {
     expect(response.status).toBe(200);
     expect(body.selected).toBeNull();
     expect(body.message).toContain("No available bikes");
+    expect(body.spokenMessage).toContain("No available bikes");
   });
 
   it("rejects stale live data", async () => {

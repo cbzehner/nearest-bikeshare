@@ -87,7 +87,10 @@ export interface Candidate {
   availableCount: number;
   distanceMeters: number;
   providerRentalUrl: string | null;
+  appleMapsPreviewUrl: string;
   appleMapsWalkingUrl: string;
+  googleMapsPreviewUrl: string;
+  googleMapsWalkingUrl: string;
   freshnessAgeSeconds: number;
   freshnessPenaltyMeters: number;
 }
@@ -102,7 +105,10 @@ export interface CandidateResponse {
   availableCount: number;
   distanceMeters: number;
   providerRentalUrl: string | null;
+  appleMapsPreviewUrl: string;
   appleMapsWalkingUrl: string;
+  googleMapsPreviewUrl: string;
+  googleMapsWalkingUrl: string;
 }
 
 export interface FeedFreshness {
@@ -115,6 +121,7 @@ export interface FeedFreshness {
 
 export interface NearestResponse {
   selected: CandidateResponse | null;
+  spokenMessage: string;
   name: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -122,7 +129,10 @@ export interface NearestResponse {
   availableCount: number | null;
   distanceMeters: number | null;
   providerRentalUrl: string | null;
+  appleMapsPreviewUrl: string | null;
   appleMapsWalkingUrl: string | null;
+  googleMapsPreviewUrl: string | null;
+  googleMapsWalkingUrl: string | null;
   feedFreshness: FeedFreshness;
   confidence: Confidence;
   approximate: true;

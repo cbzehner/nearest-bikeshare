@@ -39,7 +39,7 @@ function parseQuery(url: URL): Query | ErrorResponse {
   const longitudeParameter = url.searchParams.get("lon");
   const latitude = Number(latitudeParameter);
   const longitude = Number(longitudeParameter);
-  const type = url.searchParams.get("type") ?? "electric";
+  const type = url.searchParams.get("type") ?? "any";
   if (
     !latitudeParameter ||
     !Number.isFinite(latitude) ||
@@ -75,12 +75,29 @@ function isErrorResponse(value: Query | ErrorResponse): value is ErrorResponse {
   return "error" in value;
 }
 
+function spokenMessage(
+  candidate: ReturnType<typeof toCandidateResponse> | null,
+): string {
+  if (!candidate) {
+    return "No available bikes were found nearby. Try again later.";
+  }
+  const bikeLabel =
+    candidate.bikeType === "electric" ? "e-bike" : "classic bike";
+  const distanceFeet = Math.max(
+    0,
+    Math.round(candidate.distanceMeters * 3.28084),
+  );
+  const bikeWord = candidate.availableCount === 1 ? "bike is" : "bikes are";
+  return `The nearest available ${bikeLabel} is approximately ${distanceFeet} feet away at ${candidate.name}. ${candidate.availableCount} ${bikeWord} available.`;
+}
+
 function emptyResponse(
   query: Query,
   freshness: ReturnType<typeof aggregateFreshness>,
 ): NearestResponse {
   return {
     selected: null,
+    spokenMessage: spokenMessage(null),
     name: null,
     latitude: null,
     longitude: null,
@@ -88,7 +105,10 @@ function emptyResponse(
     availableCount: null,
     distanceMeters: null,
     providerRentalUrl: null,
+    appleMapsPreviewUrl: null,
     appleMapsWalkingUrl: null,
+    googleMapsPreviewUrl: null,
+    googleMapsWalkingUrl: null,
     feedFreshness: freshness,
     confidence: "low",
     approximate: true,
@@ -96,8 +116,7 @@ function emptyResponse(
       "Distance is straight-line. Walking time is not available.",
     requestedType: query.requestedType,
     topCandidates: [],
-    message:
-      "No available bikes were found nearby. Try again or choose any bike.",
+    message: spokenMessage(null),
   };
 }
 
@@ -142,6 +161,7 @@ export async function handleRequest(
     const selectedResponse = toCandidateResponse(selected);
     const body: NearestResponse = {
       selected: selectedResponse,
+      spokenMessage: spokenMessage(selectedResponse),
       name: selectedResponse.name,
       latitude: selectedResponse.latitude,
       longitude: selectedResponse.longitude,
@@ -149,7 +169,10 @@ export async function handleRequest(
       availableCount: selectedResponse.availableCount,
       distanceMeters: selectedResponse.distanceMeters,
       providerRentalUrl: selectedResponse.providerRentalUrl,
+      appleMapsPreviewUrl: selectedResponse.appleMapsPreviewUrl,
       appleMapsWalkingUrl: selectedResponse.appleMapsWalkingUrl,
+      googleMapsPreviewUrl: selectedResponse.googleMapsPreviewUrl,
+      googleMapsWalkingUrl: selectedResponse.googleMapsWalkingUrl,
       feedFreshness: freshness,
       confidence: confidenceFor(selected, parsedQuery.requestedType),
       approximate: true,

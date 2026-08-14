@@ -42,6 +42,32 @@ function mapsWalkingUrl(latitude: number, longitude: number): string {
   return url.toString();
 }
 
+function appleMapsPreviewUrl(
+  latitude: number,
+  longitude: number,
+  name: string,
+): string {
+  const url = new URL("https://maps.apple.com/");
+  url.searchParams.set("ll", `${latitude},${longitude}`);
+  url.searchParams.set("q", name);
+  return url.toString();
+}
+
+function googleMapsPreviewUrl(latitude: number, longitude: number): string {
+  const url = new URL("https://www.google.com/maps/search/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("query", `${latitude},${longitude}`);
+  return url.toString();
+}
+
+function googleMapsWalkingUrl(latitude: number, longitude: number): string {
+  const url = new URL("https://www.google.com/maps/dir/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("destination", `${latitude},${longitude}`);
+  url.searchParams.set("travelmode", "walking");
+  return url.toString();
+}
+
 function freshnessAgeSeconds(
   source: FeedSource,
   itemTimestamp: number | undefined,
@@ -90,7 +116,10 @@ function candidate(
       longitude,
     ),
     providerRentalUrl: rentalUrl(rentalUris),
+    appleMapsPreviewUrl: appleMapsPreviewUrl(latitude, longitude, name),
     appleMapsWalkingUrl: mapsWalkingUrl(latitude, longitude),
+    googleMapsPreviewUrl: googleMapsPreviewUrl(latitude, longitude),
+    googleMapsWalkingUrl: googleMapsWalkingUrl(latitude, longitude),
     freshnessAgeSeconds: ageSeconds,
     freshnessPenaltyMeters: freshnessPenaltyMeters(ageSeconds, source.ttl),
   };
@@ -244,10 +273,6 @@ export function rankCandidates(
       requestedTypeRank(requestedType, right.bikeType);
     if (typeDifference !== 0) return typeDifference;
 
-    const availabilityDifference =
-      (left.availableCount > 1 ? 0 : 1) - (right.availableCount > 1 ? 0 : 1);
-    if (availabilityDifference !== 0) return availabilityDifference;
-
     const leftEffectiveDistance =
       left.distanceMeters + left.freshnessPenaltyMeters;
     const rightEffectiveDistance =
@@ -257,6 +282,10 @@ export function rankCandidates(
 
     const rawDistanceDifference = left.distanceMeters - right.distanceMeters;
     if (Math.abs(rawDistanceDifference) > 0.001) return rawDistanceDifference;
+
+    const availabilityDifference =
+      (left.availableCount > 1 ? 0 : 1) - (right.availableCount > 1 ? 0 : 1);
+    if (availabilityDifference !== 0) return availabilityDifference;
     return `${left.entityType}:${left.id}`.localeCompare(
       `${right.entityType}:${right.id}`,
     );
@@ -274,7 +303,10 @@ export function toCandidateResponse(candidate: Candidate): CandidateResponse {
     availableCount: candidate.availableCount,
     distanceMeters: Math.round(candidate.distanceMeters),
     providerRentalUrl: candidate.providerRentalUrl,
+    appleMapsPreviewUrl: candidate.appleMapsPreviewUrl,
     appleMapsWalkingUrl: candidate.appleMapsWalkingUrl,
+    googleMapsPreviewUrl: candidate.googleMapsPreviewUrl,
+    googleMapsWalkingUrl: candidate.googleMapsWalkingUrl,
   };
 }
 
