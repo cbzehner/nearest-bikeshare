@@ -36,7 +36,7 @@ The first two requests should return HTTP 200 JSON. The invalid-coordinate reque
 
 The `type` query value is `electric`, `classic`, or `any`. If it is omitted, the Worker uses `any`. The Shortcut always sends `type=any`.
 
-The `units` query value is `imperial` or `metric`. If it is omitted, the Worker uses `imperial`. Imperial speech uses feet below 1,000 feet and miles at or above 1,000 feet. Metric speech uses meters below 1,000 meters and kilometers at or above 1,000 meters. The API still returns the approximate distance in `distanceMeters`.
+The `units` query value is `imperial` or `metric`. If it is omitted, the Worker uses `imperial`. Imperial speech uses feet through 1,000 feet and miles above 1,000 feet. Metric speech uses meters through 1,000 meters and kilometers above 1,000 meters. The API still returns the approximate distance in `distanceMeters`.
 
 The requested type is a preference. If no bike of that type is available, the Worker may return the other bike type and lowers `confidence` to `low`. A request never claims that a classic bike is an e-bike.
 

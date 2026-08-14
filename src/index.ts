@@ -102,14 +102,14 @@ function spokenMessage(
   return `The nearest available ${bikeLabel} is approximately ${distance.value} ${distance.unit} away at ${candidate.name}. ${candidate.availableCount} ${bikeWord} available.`;
 }
 
-function formatDistance(
+export function formatDistance(
   distanceMeters: number,
   units: DistanceUnits,
 ): { value: string; unit: string } {
   const baseValue =
     units === "metric" ? distanceMeters : distanceMeters * 3.28084;
   const threshold = 1000;
-  if (baseValue >= threshold) {
+  if (baseValue > threshold) {
     const largeUnitValue =
       units === "metric" ? baseValue / 1000 : baseValue / 5280;
     const roundedValue = Number(largeUnitValue.toFixed(1));

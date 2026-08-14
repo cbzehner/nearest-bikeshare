@@ -20,6 +20,6 @@ The installed Shortcut uses the built-in navy bicycle icon. The Grok-generated [
 7. Add **Get Dictionary Value** for `appleMapsPreviewUrl`, using the contents of the URL as the dictionary.
 8. Add **Open URLs** using `appleMapsPreviewUrl`. This always opens the map preview for the exact selected bike or station.
 
-The response also includes `googleMapsPreviewUrl` and `providerRentalUrl`. The default map setting reads `appleMapsPreviewUrl` in step 7. To use Google Maps, read `googleMapsPreviewUrl` instead. To open the official Bay Wheels rental link, read `providerRentalUrl` instead. If Lyft is installed, the provider link should open its Bay Wheels rental flow. The feed may provide a general scan or unlock link rather than a bike-specific app screen.
+The response also includes `googleMapsPreviewUrl` and `providerRentalUrl`. The default map setting reads `appleMapsPreviewUrl` in step 7. To use Google Maps, read `googleMapsPreviewUrl` instead. To open the official Bay Wheels rental link, read `providerRentalUrl` instead. If you use the provider link, add an **If** action that falls back to `appleMapsPreviewUrl` when the provider value is empty. If Lyft is installed, the provider link should open its Bay Wheels rental flow. The feed may provide a general scan or unlock link rather than a bike-specific app screen.
 
 If **Get Contents of URL** reports an error, speak: `Bay Wheels data is temporarily unavailable. Try again in a moment.`

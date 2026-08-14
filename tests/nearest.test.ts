@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { handleRequest } from "../src/index";
+import { formatDistance, handleRequest } from "../src/index";
 import type { CacheLike, JsonRecord } from "../src/types";
 
 const DISCOVERY_URL = "https://gbfs.baywheels.com/fixtures/gbfs.json";
@@ -89,6 +89,7 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.distanceMeters).toBe(0);
     expect(body.spokenMessage).toContain("feet");
     expect(body.spokenMessage).toContain("available");
+    expect(body.units).toBe("imperial");
     expect(body.providerRentalUrl).toContain(
       "example.test/rent/station-electric",
     );
@@ -106,6 +107,19 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.units).toBe("metric");
     expect(body.spokenMessage).toContain("kilometers");
     expect(body.spokenMessage).not.toContain("feet");
+  });
+
+  it("keeps exactly one thousand base units in the smaller unit", () => {
+    expect(formatDistance(304.7999, "imperial")).toEqual({
+      value: "1000",
+      unit: "feet",
+    });
+    expect(formatDistance(304.8001, "imperial").unit).toBe("miles");
+    expect(formatDistance(1000, "metric")).toEqual({
+      value: "1000",
+      unit: "meters",
+    });
+    expect(formatDistance(1000.1, "metric").unit).toBe("kilometer");
   });
 
   it("prefers the requested type before geometric distance", async () => {
