@@ -1,0 +1,20 @@
+{
+  "name": "nearest-bikeshare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "wrangler dev --local"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@cloudflare/workers-types": "^5.20260811.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.31.0"
+  }
+}

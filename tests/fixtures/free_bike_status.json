@@ -1,0 +1,56 @@
+{
+  "data": {
+    "bikes": [
+      {
+        "bike_id": "free-electric",
+        "lat": 37.7601,
+        "lon": -122.4201,
+        "is_reserved": 0,
+        "is_disabled": 0,
+        "vehicle_type_id": "2",
+        "last_reported": 1700000000,
+        "rental_uris": { "ios": "https://example.test/rent/free-electric" }
+      },
+      {
+        "bike_id": "free-classic",
+        "lat": 37.759,
+        "lon": -122.42,
+        "is_reserved": false,
+        "is_disabled": false,
+        "vehicle_type_id": "1",
+        "last_reported": 1700000000
+      },
+      {
+        "bike_id": "reserved-electric",
+        "lat": 37.76,
+        "lon": -122.42,
+        "is_reserved": 1,
+        "is_disabled": 0,
+        "vehicle_type_id": "2",
+        "last_reported": 1700000000
+      },
+      {
+        "bike_id": "disabled-electric",
+        "lat": 37.76,
+        "lon": -122.42,
+        "is_reserved": 0,
+        "is_disabled": true,
+        "vehicle_type_id": "2",
+        "last_reported": 1700000000
+      },
+      {
+        "bike_id": "docked-electric",
+        "lat": 37.76,
+        "lon": -122.42,
+        "station_id": "station-electric",
+        "is_reserved": 0,
+        "is_disabled": 0,
+        "vehicle_type_id": "2",
+        "last_reported": 1700000000
+      }
+    ]
+  },
+  "last_updated": 1700000000,
+  "ttl": 60,
+  "version": "2.3"
+}

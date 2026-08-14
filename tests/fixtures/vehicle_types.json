@@ -1,0 +1,19 @@
+{
+  "data": {
+    "vehicle_types": [
+      {
+        "vehicle_type_id": "1",
+        "form_factor": "bicycle",
+        "propulsion_type": "human"
+      },
+      {
+        "vehicle_type_id": "2",
+        "form_factor": "bicycle",
+        "propulsion_type": "electric_assist"
+      }
+    ]
+  },
+  "last_updated": 1700000000,
+  "ttl": 3600,
+  "version": "2.3"
+}

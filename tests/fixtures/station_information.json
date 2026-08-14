@@ -1,0 +1,35 @@
+{
+  "data": {
+    "stations": [
+      {
+        "station_id": "station-electric",
+        "name": "18th Street",
+        "lat": 37.76,
+        "lon": -122.42,
+        "rental_uris": { "ios": "https://example.test/rent/station-electric" }
+      },
+      {
+        "station_id": "station-classic",
+        "name": "Mission Station",
+        "lat": 37.7605,
+        "lon": -122.42,
+        "rental_uris": { "web": "https://example.test/rent/station-classic" }
+      },
+      {
+        "station_id": "station-mixed",
+        "name": "Mixed Station",
+        "lat": 37.761,
+        "lon": -122.421
+      },
+      {
+        "station_id": "station-empty",
+        "name": "Empty Station",
+        "lat": 37.762,
+        "lon": -122.422
+      }
+    ]
+  },
+  "last_updated": 1700000000,
+  "ttl": 3600,
+  "version": "2.3"
+}

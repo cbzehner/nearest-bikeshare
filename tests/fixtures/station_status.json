@@ -1,0 +1,50 @@
+{
+  "data": {
+    "stations": [
+      {
+        "station_id": "station-electric",
+        "num_bikes_available": 2,
+        "is_installed": 1,
+        "is_renting": 1,
+        "last_reported": 1700000000,
+        "vehicle_types_available": [
+          { "vehicle_type_id": "1", "count": 0 },
+          { "vehicle_type_id": "2", "count": 2 }
+        ]
+      },
+      {
+        "station_id": "station-classic",
+        "num_bikes_available": 3,
+        "is_installed": true,
+        "is_renting": true,
+        "last_reported": 1700000000,
+        "vehicle_types_available": [
+          { "vehicle_type_id": "1", "count": 3 },
+          { "vehicle_type_id": "2", "count": 0 }
+        ]
+      },
+      {
+        "station_id": "station-mixed",
+        "num_bikes_available": 5,
+        "is_installed": 1,
+        "is_renting": 1,
+        "last_reported": 1700000000,
+        "vehicle_types_available": [
+          { "vehicle_type_id": "1", "count": 4 },
+          { "vehicle_type_id": "2", "count": 1 }
+        ]
+      },
+      {
+        "station_id": "station-empty",
+        "num_bikes_available": 0,
+        "is_installed": 1,
+        "is_renting": 1,
+        "last_reported": 1700000000,
+        "vehicle_types_available": []
+      }
+    ]
+  },
+  "last_updated": 1700000000,
+  "ttl": 60,
+  "version": "2.3"
+}

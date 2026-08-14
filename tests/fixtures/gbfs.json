@@ -1,0 +1,27 @@
+{
+  "data": {
+    "en": {
+      "feeds": [
+        {
+          "name": "station_information",
+          "url": "https://gbfs.lyft.com/fixtures/station_information.json"
+        },
+        {
+          "name": "station_status",
+          "url": "https://gbfs.lyft.com/fixtures/station_status.json"
+        },
+        {
+          "name": "vehicle_types",
+          "url": "https://gbfs.lyft.com/fixtures/vehicle_types.json"
+        },
+        {
+          "name": "free_bike_status",
+          "url": "https://gbfs.lyft.com/fixtures/free_bike_status.json"
+        }
+      ]
+    }
+  },
+  "last_updated": 1700000000,
+  "ttl": 60,
+  "version": "2.3"
+}
