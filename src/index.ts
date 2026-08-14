@@ -96,7 +96,7 @@ function spokenMessage(
     return "No available bikes were found nearby. Try again later.";
   }
   const bikeLabel =
-    candidate.bikeType === "electric" ? "e-bike" : "classic bike";
+    candidate.bikeType === "electric" ? "ee bike" : "classic bike";
   const distance = formatDistance(candidate.distanceMeters, units);
   const bikeWord = candidate.availableCount === 1 ? "bike is" : "bikes are";
   return `The nearest available ${bikeLabel} is approximately ${distance.value} ${distance.unit} away at ${candidate.name}. ${candidate.availableCount} ${bikeWord} available.`;

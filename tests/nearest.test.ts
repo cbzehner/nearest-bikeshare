@@ -88,6 +88,7 @@ describe("nearest bikeshare endpoint", () => {
     });
     expect(body.distanceMeters).toBe(0);
     expect(body.spokenMessage).toContain("feet");
+    expect(body.spokenMessage).toContain("ee bike");
     expect(body.spokenMessage).toContain("available");
     expect(body.units).toBe("imperial");
     expect(body.providerRentalUrl).toContain(
