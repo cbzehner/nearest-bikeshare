@@ -13,6 +13,7 @@ import type {
   NearestResponse,
   Query,
   RequestedBikeType,
+  DistanceUnits,
 } from "./types";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -40,6 +41,7 @@ function parseQuery(url: URL): Query | ErrorResponse {
   const latitude = Number(latitudeParameter);
   const longitude = Number(longitudeParameter);
   const type = url.searchParams.get("type") ?? "any";
+  const units = url.searchParams.get("units") ?? "imperial";
   if (
     !latitudeParameter ||
     !Number.isFinite(latitude) ||
@@ -68,7 +70,18 @@ function parseQuery(url: URL): Query | ErrorResponse {
       message: "type must be electric, classic, or any.",
     };
   }
-  return { latitude, longitude, requestedType: type };
+  if (units !== "imperial" && units !== "metric") {
+    return {
+      error: "invalid_units",
+      message: "units must be imperial or metric.",
+    };
+  }
+  return {
+    latitude,
+    longitude,
+    requestedType: type,
+    units: units as DistanceUnits,
+  };
 }
 
 function isErrorResponse(value: Query | ErrorResponse): value is ErrorResponse {
@@ -77,18 +90,49 @@ function isErrorResponse(value: Query | ErrorResponse): value is ErrorResponse {
 
 function spokenMessage(
   candidate: ReturnType<typeof toCandidateResponse> | null,
+  units: DistanceUnits,
 ): string {
   if (!candidate) {
     return "No available bikes were found nearby. Try again later.";
   }
   const bikeLabel =
     candidate.bikeType === "electric" ? "e-bike" : "classic bike";
-  const distanceFeet = Math.max(
-    0,
-    Math.round(candidate.distanceMeters * 3.28084),
-  );
+  const distance = formatDistance(candidate.distanceMeters, units);
   const bikeWord = candidate.availableCount === 1 ? "bike is" : "bikes are";
-  return `The nearest available ${bikeLabel} is approximately ${distanceFeet} feet away at ${candidate.name}. ${candidate.availableCount} ${bikeWord} available.`;
+  return `The nearest available ${bikeLabel} is approximately ${distance.value} ${distance.unit} away at ${candidate.name}. ${candidate.availableCount} ${bikeWord} available.`;
+}
+
+function formatDistance(
+  distanceMeters: number,
+  units: DistanceUnits,
+): { value: string; unit: string } {
+  const baseValue =
+    units === "metric" ? distanceMeters : distanceMeters * 3.28084;
+  const threshold = 1000;
+  if (baseValue >= threshold) {
+    const largeUnitValue =
+      units === "metric" ? baseValue / 1000 : baseValue / 5280;
+    const roundedValue = Number(largeUnitValue.toFixed(1));
+    const unit =
+      units === "metric"
+        ? roundedValue === 1
+          ? "kilometer"
+          : "kilometers"
+        : roundedValue === 1
+          ? "mile"
+          : "miles";
+    return { value: String(roundedValue), unit };
+  }
+  const roundedValue = Math.max(0, Math.round(baseValue));
+  const unit =
+    units === "metric"
+      ? roundedValue === 1
+        ? "meter"
+        : "meters"
+      : roundedValue === 1
+        ? "foot"
+        : "feet";
+  return { value: String(roundedValue), unit };
 }
 
 function emptyResponse(
@@ -97,7 +141,8 @@ function emptyResponse(
 ): NearestResponse {
   return {
     selected: null,
-    spokenMessage: spokenMessage(null),
+    spokenMessage: spokenMessage(null, query.units),
+    units: query.units,
     name: null,
     latitude: null,
     longitude: null,
@@ -116,7 +161,7 @@ function emptyResponse(
       "Distance is straight-line. Walking time is not available.",
     requestedType: query.requestedType,
     topCandidates: [],
-    message: spokenMessage(null),
+    message: spokenMessage(null, query.units),
   };
 }
 
@@ -161,7 +206,8 @@ export async function handleRequest(
     const selectedResponse = toCandidateResponse(selected);
     const body: NearestResponse = {
       selected: selectedResponse,
-      spokenMessage: spokenMessage(selectedResponse),
+      spokenMessage: spokenMessage(selectedResponse, parsedQuery.units),
+      units: parsedQuery.units,
       name: selectedResponse.name,
       latitude: selectedResponse.latitude,
       longitude: selectedResponse.longitude,

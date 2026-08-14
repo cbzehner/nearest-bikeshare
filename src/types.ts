@@ -1,4 +1,5 @@
 export type RequestedBikeType = "electric" | "classic" | "any";
+export type DistanceUnits = "imperial" | "metric";
 export type BikeType = Exclude<RequestedBikeType, "any">;
 export type EntityType = "station" | "bike";
 export type Confidence = "high" | "medium" | "low";
@@ -75,6 +76,7 @@ export interface Query {
   latitude: number;
   longitude: number;
   requestedType: RequestedBikeType;
+  units: DistanceUnits;
 }
 
 export interface Candidate {
@@ -122,6 +124,7 @@ export interface FeedFreshness {
 export interface NearestResponse {
   selected: CandidateResponse | null;
   spokenMessage: string;
+  units: DistanceUnits;
   name: string | null;
   latitude: number | null;
   longitude: number | null;

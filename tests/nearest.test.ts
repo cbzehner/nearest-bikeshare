@@ -89,10 +89,23 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.distanceMeters).toBe(0);
     expect(body.spokenMessage).toContain("feet");
     expect(body.spokenMessage).toContain("available");
+    expect(body.providerRentalUrl).toContain(
+      "example.test/rent/station-electric",
+    );
     expect(body.appleMapsPreviewUrl).toContain("maps.apple.com");
     expect(body.googleMapsPreviewUrl).toContain("google.com/maps");
     expect(body.approximate).toBe(true);
     expect((body.topCandidates as unknown[]).length).toBe(5);
+  });
+
+  it("uses metric units and switches to kilometers over one thousand meters", async () => {
+    const { body } = await responseJson(
+      "https://worker.test/nearest?lat=37.78&lon=-122.42&type=any&units=metric",
+    );
+
+    expect(body.units).toBe("metric");
+    expect(body.spokenMessage).toContain("kilometers");
+    expect(body.spokenMessage).not.toContain("feet");
   });
 
   it("prefers the requested type before geometric distance", async () => {
@@ -230,6 +243,21 @@ describe("nearest bikeshare endpoint", () => {
     expect(await response.json()).toEqual({
       error: "invalid_latitude",
       message: "lat must be a number from -90 to 90.",
+    });
+  });
+
+  it("rejects an invalid distance unit", async () => {
+    const response = await handleRequest(
+      new Request(
+        "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any&units=feet",
+      ),
+      dependencies(),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "invalid_units",
+      message: "units must be imperial or metric.",
     });
   });
 });
