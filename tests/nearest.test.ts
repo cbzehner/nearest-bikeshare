@@ -155,6 +155,24 @@ describe("nearest bikeshare endpoint", () => {
     });
   });
 
+  it("does not speak the provider placeholder name for a free-floating e-bike", async () => {
+    const emptyStatus = clone(fixture("station_status.json"));
+    const stations = (emptyStatus.data as JsonRecord).stations as JsonRecord[];
+    for (const station of stations) {
+      station.num_bikes_available = 0;
+      station.vehicle_types_available = [];
+    }
+    const { body } = await handleRequestWithOverrides(
+      { "station_status.json": emptyStatus },
+      "https://worker.test/nearest?lat=37.7605&lon=-122.42&type=electric",
+    );
+
+    expect(body.name).toBe("Available e-bike");
+    expect(body.spokenMessage).toContain("ee bike");
+    expect(body.spokenMessage).not.toContain("e-bike");
+    expect(body.spokenMessage).not.toContain("at Available");
+  });
+
   it("uses type-specific counts for a mixed station", async () => {
     const { body } = await responseJson(
       "https://worker.test/nearest?lat=37.761&lon=-122.421&type=electric",

@@ -99,7 +99,9 @@ function spokenMessage(
     candidate.bikeType === "electric" ? "ee bike" : "classic bike";
   const distance = formatDistance(candidate.distanceMeters, units);
   const bikeWord = candidate.availableCount === 1 ? "bike is" : "bikes are";
-  return `The nearest available ${bikeLabel} is approximately ${distance.value} ${distance.unit} away at ${candidate.name}. ${candidate.availableCount} ${bikeWord} available.`;
+  const locationPhrase =
+    candidate.entityType === "station" ? ` at ${candidate.name}` : "";
+  return `The nearest available ${bikeLabel} is approximately ${distance.value} ${distance.unit} away${locationPhrase}. ${candidate.availableCount} ${bikeWord} available.`;
 }
 
 export function formatDistance(
