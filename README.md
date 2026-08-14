@@ -61,6 +61,18 @@ The exact action recipe is in [shortcut/Nearest Bikeshare.md](shortcut/Nearest%2
 
 The recipe gets the current location, always asks the Worker for any available bike, and speaks the Worker-generated result. Electric bikes are spoken as “ee bike” so Siri does not say “eh-bike”. Set the literal `units=imperial` in the URL to `units=metric` for meters and kilometers. The recipe opens an Apple Maps preview at the selected bike or station. To use Google Maps instead, read `googleMapsPreviewUrl` in the final dictionary action. To open the official Bay Wheels rental link, read `providerRentalUrl` instead. If Lyft is installed, that link should open its Bay Wheels rental flow; the GBFS feed does not guarantee a bike-specific deep link.
 
+## Provider deep-link spike
+
+The current official Bay Wheels `free_bike_status` feed includes `rental_uris.ios`, but the live feed currently returns the same URL for each sampled bike:
+
+```text
+https://sfo.lft.to/lastmile_qr_scan
+```
+
+That URL opens the general Bay Wheels/Lyft scan flow. It does not identify the selected `bike_id`. Bay Wheels documents unlocking by scanning the QR code on the bike in the Lyft app. The GBFS specification describes a vehicle rental URI as a provider-supplied app link that should be specific to the individual vehicle when one is available.
+
+The Worker passes through the feed's iOS rental URI and does not append `bike_id` or construct an undocumented Lyft URL. This is the safe behavior for the current feed. If Bay Wheels later publishes a bike-specific `rental_uris.ios`, the Worker will return it without a code change. Until then, use the map preview for the exact selected bike or station and treat `providerRentalUrl` as the generic scan/unlock flow.
+
 ## Response shape
 
 Successful responses include `selected`, the duplicated selected fields (`name`, `latitude`, `longitude`, `bikeType`, `availableCount`, `distanceMeters`), `spokenMessage`, `units`, `providerRentalUrl`, Apple Maps preview and walking URLs, Google Maps preview and walking URLs, `feedFreshness`, `confidence`, `approximate`, and the ordered `topCandidates` array with at most five entries. A no-result response has `selected: null` and HTTP 200. Invalid input returns HTTP 400. Required-feed failures return HTTP 503; a failed optional free-bike feed does not suppress station results.
