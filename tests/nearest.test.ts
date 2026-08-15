@@ -217,8 +217,60 @@ describe("nearest bikeshare endpoint", () => {
 
     expect(response.status).toBe(200);
     expect(body.selected).toBeNull();
-    expect(body.message).toContain("No available bikes");
     expect(body.spokenMessage).toContain("No available bikes");
+    expect(body.appleMapsPreviewUrl).toBeNull();
+    expect(body.googleMapsPreviewUrl).toBeNull();
+  });
+
+  it("prefers a nearby single bike over a farther station with multiple bikes", async () => {
+    const stationInformation = clone(fixture("station_information.json"));
+    (stationInformation.data as JsonRecord).stations = [
+      {
+        station_id: "station-electric",
+        name: "Far Station",
+        lat: 37.7672,
+        lon: -122.42,
+      },
+    ];
+    const stationStatus = clone(fixture("station_status.json"));
+    (stationStatus.data as JsonRecord).stations = [
+      {
+        station_id: "station-electric",
+        num_bikes_available: 2,
+        is_installed: 1,
+        is_renting: 1,
+        last_reported: 1700000000,
+        vehicle_types_available: [{ vehicle_type_id: "2", count: 2 }],
+      },
+    ];
+    const freeBikes = clone(fixture("free_bike_status.json"));
+    (freeBikes.data as JsonRecord).bikes = [
+      {
+        bike_id: "nearby-electric",
+        lat: 37.76027,
+        lon: -122.42,
+        is_reserved: 0,
+        is_disabled: 0,
+        vehicle_type_id: "2",
+        last_reported: 1700000000,
+      },
+    ];
+
+    const { body } = await handleRequestWithOverrides(
+      {
+        "station_information.json": stationInformation,
+        "station_status.json": stationStatus,
+        "free_bike_status.json": freeBikes,
+      },
+      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+    );
+
+    expect(body.selected).toMatchObject({
+      entityType: "bike",
+      id: "nearby-electric",
+      availableCount: 1,
+    });
+    expect(body.distanceMeters).toBeLessThan(50);
   });
 
   it("rejects stale live data", async () => {

@@ -60,7 +60,6 @@ export interface FeedSource {
   name: string;
   lastUpdated: number;
   ttl: number;
-  fetchedAt: number;
   fromCache: boolean;
 }
 
@@ -142,7 +141,6 @@ export interface NearestResponse {
   approximationNote: string;
   requestedType: RequestedBikeType;
   topCandidates: CandidateResponse[];
-  message?: string;
 }
 
 export interface ErrorResponse {

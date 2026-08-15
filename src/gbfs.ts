@@ -485,9 +485,6 @@ async function loadFeed<T>(
 ): Promise<LoadedFeed<T>> {
   const loaded = await fetchPayload(url, name, dependencies);
   const parsed = parser(loaded.payload, name);
-  const fetchedAt = (
-    dependencies.nowSeconds ?? (() => Math.floor(Date.now() / 1000))
-  )();
 
   if (!loaded.fromCache && parsed.meta.ttl > 0 && dependencies.cache) {
     const response = new Response(JSON.stringify(loaded.payload), {
@@ -506,7 +503,6 @@ async function loadFeed<T>(
       name,
       lastUpdated: parsed.meta.lastUpdated,
       ttl: parsed.meta.ttl,
-      fetchedAt,
       fromCache: loaded.fromCache,
     },
   };

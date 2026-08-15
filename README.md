@@ -40,6 +40,8 @@ The `units` query value is `imperial` or `metric`. If it is omitted, the Worker 
 
 The requested type is a preference. If no bike of that type is available, the Worker may return the other bike type and lowers `confidence` to `low`. A request never claims that a classic bike is an e-bike.
 
+The Shortcut uses `type=any`. In that mode, a nearby candidate wins over a much farther candidate; availability count breaks close ties. This keeps a single bike 30 meters away ahead of a station with several bikes 800 meters away.
+
 ## Deploy
 
 ```sh
@@ -59,7 +61,7 @@ Replace `YOUR-WORKER.workers.dev` with the URL printed by Wrangler. The deployed
 
 The exact action recipe is in [shortcut/Nearest Bikeshare.md](shortcut/Nearest%20Bikeshare.md). Build it once in the Shortcuts app, then say “Siri, nearest bikeshare”.
 
-The recipe gets the current location, always asks the Worker for any available bike, and speaks the Worker-generated result. Electric bikes are spoken as “ee bike” so Siri does not say “eh-bike”. Set the literal `units=imperial` in the URL to `units=metric` for meters and kilometers. The recipe opens an Apple Maps preview at the selected bike or station. To use Google Maps instead, read `googleMapsPreviewUrl` in the final dictionary action. To open the official Bay Wheels rental link, read `providerRentalUrl` instead. If Lyft is installed, that link should open its Bay Wheels rental flow; the GBFS feed does not guarantee a bike-specific deep link.
+The recipe gets the current location once, always asks the Worker for any available bike, and speaks the Worker-generated result. Electric bikes are spoken as “ee bike” so Siri does not say “eh-bike”. Set the literal `units=imperial` in the URL to `units=metric` for meters and kilometers. When a result exists, the recipe opens an Apple Maps preview at the selected bike or station; with no result, it speaks the no-results message and skips Maps. To use Google Maps instead, read `googleMapsPreviewUrl` in the final dictionary action. The Shortcut does not open `providerRentalUrl` because the current feed usually supplies a generic scan flow rather than a bike-specific app screen.
 
 ## Provider deep-link spike
 

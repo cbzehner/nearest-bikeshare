@@ -163,7 +163,6 @@ function emptyResponse(
       "Distance is straight-line. Walking time is not available.",
     requestedType: query.requestedType,
     topCandidates: [],
-    message: spokenMessage(null, query.units),
   };
 }
 
