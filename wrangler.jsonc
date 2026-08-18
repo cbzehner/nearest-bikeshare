@@ -3,4 +3,17 @@
   "name": "nearest-bikeshare",
   "main": "src/index.ts",
   "compatibility_date": "2025-08-13",
+  "vars": {
+    "SHORTCUT_SHARE_URL": "",
+  },
+  "ratelimits": [
+    {
+      "name": "NEAREST_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 10,
+        "period": 60,
+      },
+    },
+  ],
 }

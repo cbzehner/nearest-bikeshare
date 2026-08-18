@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { formatDistance, handleRequest } from "../src/index";
 import { OPENROUTESERVICE_MATRIX_URL } from "../src/routing";
-import type { CacheLike, JsonRecord } from "../src/types";
+import type { CacheLike, JsonRecord, RateLimiter } from "../src/types";
 
 const DISCOVERY_URL = "https://gbfs.baywheels.com/fixtures/gbfs.json";
 const FIXTURE_URLS: Record<string, string> = {
@@ -42,6 +42,8 @@ interface FixtureOptions {
   rawFeed?: string;
   routingResponse?: JsonRecord;
   routingFailure?: boolean;
+  rateLimiter?: RateLimiter;
+  shortcutShareUrl?: string;
 }
 
 function dependencies(options: FixtureOptions = {}) {
@@ -80,6 +82,9 @@ function dependencies(options: FixtureOptions = {}) {
       options.routingResponse || options.routingFailure
         ? "test-key"
         : undefined,
+    rateLimiter: options.rateLimiter,
+    clientIp: "203.0.113.10",
+    shortcutShareUrl: options.shortcutShareUrl,
   };
 }
 
@@ -370,17 +375,110 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.approximate).toBe(true);
   });
 
-  it("keeps the full candidate list when a route is unavailable", async () => {
-    const { body } = await handleRequestWithOptions({
-      routingResponse: {
-        distances: [[null]],
-        durations: [[80]],
+  it("keeps walking metrics when one destination is unroutable", async () => {
+    const stationInformation = clone(fixture("station_information.json"));
+    (stationInformation.data as JsonRecord).stations = [
+      {
+        station_id: "station-electric",
+        name: "Far Station",
+        lat: 37.7672,
+        lon: -122.42,
       },
-    });
+    ];
+    const stationStatus = clone(fixture("station_status.json"));
+    (stationStatus.data as JsonRecord).stations = [
+      {
+        station_id: "station-electric",
+        num_bikes_available: 2,
+        is_installed: 1,
+        is_renting: 1,
+        last_reported: 1700000000,
+        vehicle_types_available: [{ vehicle_type_id: "2", count: 2 }],
+      },
+    ];
+    const freeBikes = clone(fixture("free_bike_status.json"));
+    (freeBikes.data as JsonRecord).bikes = [
+      {
+        bike_id: "nearby-electric",
+        lat: 37.76027,
+        lon: -122.42,
+        is_reserved: 0,
+        is_disabled: 0,
+        vehicle_type_id: "2",
+        last_reported: 1700000000,
+      },
+    ];
 
-    expect(body.distanceSource).toBe("straight_line");
-    expect(body.routingProvider).toBeNull();
-    expect(body.approximate).toBe(true);
+    const { body } = await handleRequestWithOptions(
+      {
+        overrides: {
+          "station_information.json": stationInformation,
+          "station_status.json": stationStatus,
+          "free_bike_status.json": freeBikes,
+        },
+        routingResponse: {
+          distances: [[300, null]],
+          durations: [[240, null]],
+        },
+      },
+      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+    );
+
+    expect(body.selected).toMatchObject({
+      entityType: "bike",
+      id: "nearby-electric",
+      distanceMeters: 300,
+      distanceSource: "walking",
+      walkingTimeSeconds: 240,
+    });
+    expect(body.routingProvider).toBe("openrouteservice");
+  });
+
+  it("routes ten unique places when mixed stations fill more than ten rows", async () => {
+    const stations = Array.from({ length: 6 }, (_, index) => ({
+      station_id: `mixed-${index + 1}`,
+      name: `Mixed ${index + 1}`,
+      lat: 37.761 + index * 0.001,
+      lon: -122.42,
+    }));
+    const stationInformation = clone(fixture("station_information.json"));
+    (stationInformation.data as JsonRecord).stations = stations;
+    const stationStatus = clone(fixture("station_status.json"));
+    (stationStatus.data as JsonRecord).stations = stations.map((station) => ({
+      station_id: station.station_id,
+      num_bikes_available: 2,
+      is_installed: 1,
+      is_renting: 1,
+      last_reported: 1700000000,
+      vehicle_types_available: [
+        { vehicle_type_id: "1", count: 1 },
+        { vehicle_type_id: "2", count: 1 },
+      ],
+    }));
+    const freeBikes = clone(fixture("free_bike_status.json"));
+    (freeBikes.data as JsonRecord).bikes = [];
+
+    const { body } = await handleRequestWithOptions(
+      {
+        overrides: {
+          "station_information.json": stationInformation,
+          "station_status.json": stationStatus,
+          "free_bike_status.json": freeBikes,
+        },
+        routingResponse: {
+          distances: [[500, 500, 500, 500, 500, 80]],
+          durations: [[400, 400, 400, 400, 400, 60]],
+        },
+      },
+      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+    );
+
+    expect(body.selected).toMatchObject({
+      name: "Mixed 6",
+      distanceMeters: 80,
+      distanceSource: "walking",
+      walkingTimeSeconds: 60,
+    });
   });
 
   it("rejects stale live data", async () => {
@@ -408,24 +506,26 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.selected).toMatchObject({ entityType: "station" });
   });
 
-  it("returns 503 for a malformed required feed", async () => {
-    const { response } = await handleRequestWithOptions({
+  it("speaks a provider outage when a required feed is malformed", async () => {
+    const { response, body } = await handleRequestWithOptions({
       rawFeed: "station_status.json",
     });
 
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({
-      error: "provider_unavailable",
-      message: "Bay Wheels data is temporarily unavailable.",
-    });
+    expect(response.status).toBe(200);
+    expect(body.selected).toBeNull();
+    expect(body.mapPreviewUrl).toBeNull();
+    expect(body.error).toBe("provider_unavailable");
+    expect(body.spokenMessage).toContain("temporarily unavailable");
   });
 
-  it("returns 503 when a required provider feed fails", async () => {
-    const { response } = await handleRequestWithOptions({
+  it("speaks a provider outage when a required feed fails", async () => {
+    const { response, body } = await handleRequestWithOptions({
       failingFeed: "station_status.json",
     });
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
+    expect(body.selected).toBeNull();
+    expect(body.spokenMessage).toContain("temporarily unavailable");
   });
 
   it("returns 400 for invalid coordinates and type", async () => {
@@ -469,6 +569,130 @@ describe("nearest bikeshare endpoint", () => {
       error: "invalid_maps",
       message: "maps must be apple or google.",
     });
+  });
+
+  it("speaks a retry message when the rate limiter denies the request", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/nearest?lat=91&lon=-122.42&type=any"),
+      dependencies({
+        rateLimiter: {
+          async limit() {
+            return { success: false };
+          },
+        },
+      }),
+    );
+    const body = (await response.json()) as JsonRecord;
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(body.selected).toBeNull();
+    expect(body.mapPreviewUrl).toBeNull();
+    expect(body.error).toBe("rate_limited");
+    expect(body.spokenMessage).toContain("Try again in a minute");
+  });
+
+  it("continues the lookup when the rate limiter throws", async () => {
+    const { response, body } = await handleRequestWithOptions({
+      rateLimiter: {
+        async limit() {
+          throw new Error("limiter unavailable");
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(body.selected).not.toBeNull();
+  });
+
+  it("keeps a successful path when the rate limiter allows the request", async () => {
+    const { response, body } = await handleRequestWithOptions({
+      rateLimiter: {
+        async limit() {
+          return { success: true };
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(body.selected).not.toBeNull();
+  });
+
+  it("returns a Bay Area message without fetching feeds for an out-of-area point", async () => {
+    const { response, body } = await handleRequestWithOptions(
+      { failingFeed: "station_status.json" },
+      "https://worker.test/nearest?lat=40.71&lon=-74.01&type=any",
+    );
+
+    expect(response.status).toBe(200);
+    expect(body.selected).toBeNull();
+    expect(body.mapPreviewUrl).toBeNull();
+    expect(body.spokenMessage).toContain("San Francisco Bay Area");
+    expect(body.approximationNote).toContain("San Francisco Bay Area");
+    expect((body.feedFreshness as JsonRecord).feeds).toEqual([]);
+    expect((body.feedFreshness as JsonRecord).lastUpdated).not.toContain(
+      "1970-01-01",
+    );
+  });
+
+  it("serves a landing page with the Shortcut share link", async () => {
+    const shareUrl = "https://www.icloud.com/shortcuts/abc123";
+    const response = await handleRequest(
+      new Request("https://worker.test/"),
+      dependencies({ shortcutShareUrl: shareUrl }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    const html = await response.text();
+    expect(html).toContain("Nearest Bikeshare");
+    expect(html).toContain(shareUrl);
+    expect(html).toContain("does not store that location");
+  });
+
+  it("accepts an iCloud share URL with a trailing slash or query string", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/"),
+      dependencies({
+        shortcutShareUrl: "https://icloud.com/shortcuts/abc123/?foo=1",
+      }),
+    );
+    const html = await response.text();
+
+    expect(html).toContain("https://www.icloud.com/shortcuts/abc123");
+    expect(html).toContain("Add Shortcut");
+    expect(html).not.toContain("foo=1");
+  });
+
+  it("omits the add link when no Shortcut share URL is set", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/"),
+      dependencies(),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain("Nearest Bikeshare");
+    expect(html).not.toContain("Add Shortcut");
+    expect(html).not.toContain("icloud.com/shortcuts");
+  });
+
+  it("rejects a non-GET request", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/nearest", { method: "POST" }),
+      dependencies(),
+    );
+
+    expect(response.status).toBe(405);
+  });
+
+  it("returns 404 for an unknown path", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/shortcut"),
+      dependencies(),
+    );
+
+    expect(response.status).toBe(404);
   });
 });
 

@@ -52,7 +52,7 @@ The requested bike type is a preference. If that type is not available, the Work
 
 For `type=any`, distance has the most weight. The number of available bikes breaks close ties. For example, one bike 30 meters away ranks above a station with several bikes 800 meters away.
 
-When walking routes are available, the Worker ranks the ten closest candidates by walking distance. When they are not available, it ranks all candidates by straight-line distance.
+When walking routes are available, the Worker ranks up to ten unique nearby places by walking distance. Both bike types at one station share one walking measurement. If one place cannot be routed, the others still use walking distance. When walking routes are not available, it ranks all candidates by straight-line distance.
 
 OpenRouteService ranks the candidates. Apple Maps or Google Maps may choose a different walking path when it opens.
 
@@ -77,6 +77,20 @@ curl 'https://YOUR-WORKER.workers.dev/nearest?lat=37.7600&lon=-122.4200&type=any
 Replace `YOUR-WORKER.workers.dev` with the URL from Wrangler. The request should return HTTP 200 with JSON. The JSON includes `selected`, `spokenMessage`, `units`, `topCandidates`, `feedFreshness`, and `confidence`. It also includes the selected map provider, walking distance data, Apple Maps and Google Maps URLs, and `providerRentalUrl` when the provider supplies one.
 
 Use `https://YOUR-WORKER.workers.dev/nearest` as the deployed URL in the Shortcut.
+
+## Public use
+
+The Worker origin is the public URL:
+
+```text
+https://nearest-bikeshare.hooks.workers.dev/
+```
+
+That page is the short link to share. After you copy an iCloud link from the working Shortcut, put it in `SHORTCUT_SHARE_URL` in `wrangler.jsonc` and deploy. The page then shows **Add Shortcut**.
+
+`GET /nearest` allows 10 requests per 60 seconds per client IP. Extra requests return a spoken retry message and do not open Maps. The Worker only ranks bikes for coordinates in the San Francisco Bay Area. A point outside that area gets a spoken no-result message and does not call Bay Wheels or OpenRouteService. A Bay Wheels outage also returns a spoken message so Siri can say it.
+
+The Worker uses the caller’s current location to find a nearby bike. It does not store that location. There is no account and no analytics.
 
 ## Shortcut
 
@@ -118,7 +132,7 @@ A successful result includes:
 - `feedFreshness`, `confidence`, and `approximate`
 - up to five ordered entries in `topCandidates`
 
-A response with no result has `selected: null` and returns HTTP 200. Invalid input returns HTTP 400. A required feed failure returns HTTP 503. A failure in the optional free-floating bike feed does not remove station results. `distanceSource` is `walking` when OpenRouteService returns a route and `straight_line` when the Worker uses its fallback. `routingProvider` names the route service when walking data is available.
+A response with no result has `selected: null` and returns HTTP 200. Invalid input returns HTTP 400. A required feed failure or a rate-limit hit also returns HTTP 200 with `spokenMessage` and an empty `mapPreviewUrl`, plus an `error` field. A failure in the optional free-floating bike feed does not remove station results. `distanceSource` is `walking` when OpenRouteService returns a route and `straight_line` when the Worker uses its fallback. `routingProvider` names the route service when walking data is available.
 
 ## Feed handling
 

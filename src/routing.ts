@@ -97,6 +97,23 @@ async function fetchRouteMatrix(
   }
 }
 
+function locationKey(candidate: Candidate): string {
+  return `${candidate.latitude.toFixed(6)},${candidate.longitude.toFixed(6)}`;
+}
+
+function uniqueLocations(candidates: Candidate[]): Candidate[] {
+  const locations: Candidate[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const key = locationKey(candidate);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    locations.push(candidate);
+    if (locations.length === MAX_ROUTED_CANDIDATES) break;
+  }
+  return locations;
+}
+
 export async function addWalkingDistances(
   query: Query,
   candidates: Candidate[],
@@ -106,25 +123,39 @@ export async function addWalkingDistances(
     return { candidates };
   }
 
-  const routedCandidates = candidates.slice(0, MAX_ROUTED_CANDIDATES);
+  const locations = uniqueLocations(candidates);
+  const selectedKeys = new Set(locations.map(locationKey));
+  const selected = candidates.filter((candidate) =>
+    selectedKeys.has(locationKey(candidate)),
+  );
   try {
-    const matrix = await fetchRouteMatrix(
-      query,
-      routedCandidates,
-      dependencies,
-    );
+    const matrix = await fetchRouteMatrix(query, locations, dependencies);
     const distances = matrix.distances[0];
     const durations = matrix.durations[0];
-    if (distances.some((distance) => distance === null)) return { candidates };
-    const routed = routedCandidates.map((candidate, index) => {
-      return {
-        ...candidate,
-        distanceMeters: distances[index] ?? candidate.distanceMeters,
-        distanceSource: "walking" as const,
-        walkingTimeSeconds: durations[index],
-      };
-    });
-    return { candidates: routed };
+    const walkingByKey = new Map<
+      string,
+      { distanceMeters: number; walkingTimeSeconds: number | null }
+    >();
+    for (const [index, location] of locations.entries()) {
+      const distance = distances[index];
+      if (distance === null) continue;
+      walkingByKey.set(locationKey(location), {
+        distanceMeters: distance,
+        walkingTimeSeconds: durations[index] ?? null,
+      });
+    }
+    return {
+      candidates: selected.map((candidate) => {
+        const walking = walkingByKey.get(locationKey(candidate));
+        if (!walking) return candidate;
+        return {
+          ...candidate,
+          distanceMeters: walking.distanceMeters,
+          distanceSource: "walking" as const,
+          walkingTimeSeconds: walking.walkingTimeSeconds,
+        };
+      }),
+    };
   } catch {
     return { candidates };
   }

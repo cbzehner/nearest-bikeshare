@@ -166,6 +166,10 @@ export interface CacheLike {
   put(request: Request, response: Response): Promise<void>;
 }
 
+export interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
 export interface AppDependencies {
   fetchImpl: typeof fetch;
   cache?: CacheLike;
@@ -173,9 +177,14 @@ export interface AppDependencies {
   discoveryUrl?: string;
   staleAfterSeconds?: number;
   openRouteServiceApiKey?: string;
+  rateLimiter?: RateLimiter;
+  clientIp?: string;
+  shortcutShareUrl?: string;
 }
 
 export interface Env {
   GBFS_DISCOVERY_URL?: string;
   OPENROUTESERVICE_API_KEY?: string;
+  SHORTCUT_SHARE_URL?: string;
+  NEAREST_RATE_LIMITER?: RateLimiter;
 }
