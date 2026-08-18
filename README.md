@@ -1,12 +1,16 @@
 # Nearest Bikeshare
 
-Nearest Bikeshare is a small personal tool. It finds an available Bay Wheels bike through Siri.
+Find a nearby Bay Wheels bike with Siri.
 
-At run time, a Cloudflare Worker reads the official Bay Wheels General Bikeshare Feed Specification (GBFS) 2.3 discovery feed. The Worker validates each linked feed before it uses that feed. It caches each valid response for the feed's `ttl` value.
+**Add it:** [https://nearest-bikeshare.hooks.workers.dev/](https://nearest-bikeshare.hooks.workers.dev/)
 
-The project does not use a database, user account, Lyft login, web scraping, analytics, or a large language model (LLM).
+Then say, “Siri, nearest bikeshare.”
 
-The Worker uses OpenRouteService to compare walking distances for up to ten nearby candidates when `OPENROUTESERVICE_API_KEY` is set. If the key is missing or the route service fails, it uses a straight-line distance instead. The response marks that result as approximate. The Shortcut can open an Apple Maps or Google Maps preview. The response also includes walking links and the official provider rental URL when Bay Wheels supplies one.
+This covers Bay Wheels in the San Francisco Bay Area. There is no account. The Worker uses your current location to find a nearby bike. It does not store that location.
+
+The Worker reads the official Bay Wheels General Bikeshare Feed Specification (GBFS) 2.3 discovery feed. It validates each linked feed and caches each valid response for that feed’s `ttl`. It does not use a database, user account, Lyft login, web scraping, analytics, or a large language model.
+
+When `OPENROUTESERVICE_API_KEY` is set, the Worker compares walking distances for up to ten nearby places. If the key is missing or routing fails, it uses a straight-line distance and marks the result as approximate.
 
 ## Local setup
 
@@ -80,17 +84,11 @@ Use `https://YOUR-WORKER.workers.dev/nearest` as the deployed URL in the Shortcu
 
 ## Public use
 
-The Worker origin is the public URL:
-
-```text
-https://nearest-bikeshare.hooks.workers.dev/
-```
-
-That page is the short link to share. It is a styled add page: it explains the product, shows how it works, and offers **Add Shortcut**. After you copy an iCloud link from the working Shortcut, put it in `SHORTCUT_SHARE_URL` in `wrangler.jsonc` and deploy. The page then shows **Add Shortcut**.
+Share [https://nearest-bikeshare.hooks.workers.dev/](https://nearest-bikeshare.hooks.workers.dev/). That page explains the product and offers **Add Shortcut**.
 
 `GET /nearest` allows 10 requests per 60 seconds per client IP. Extra requests return a spoken retry message and do not open Maps. The Worker only ranks bikes for coordinates in the San Francisco Bay Area. A point outside that area gets a spoken no-result message and does not call Bay Wheels or OpenRouteService. A Bay Wheels outage also returns a spoken message so Siri can say it.
 
-The Worker uses the caller’s current location to find a nearby bike. It does not store that location. There is no account and no analytics.
+After you rebuild the Shortcut, use Share → Copy iCloud Link, put that URL in `SHORTCUT_SHARE_URL` in `wrangler.jsonc`, and deploy.
 
 ## Shortcut
 
