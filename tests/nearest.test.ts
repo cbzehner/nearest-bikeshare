@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { formatDistance, handleRequest } from "../src/index";
+import { OPENROUTESERVICE_MATRIX_URL } from "../src/routing";
 import type { CacheLike, JsonRecord } from "../src/types";
 
 const DISCOVERY_URL = "https://gbfs.baywheels.com/fixtures/gbfs.json";
@@ -39,12 +40,22 @@ interface FixtureOptions {
   overrides?: Record<string, unknown>;
   failingFeed?: string;
   rawFeed?: string;
+  routingResponse?: JsonRecord;
+  routingFailure?: boolean;
 }
 
 function dependencies(options: FixtureOptions = {}) {
   const cache = new TestCache();
   const fetchImpl: typeof fetch = async (input) => {
     const url = String(input);
+    if (url === OPENROUTESERVICE_MATRIX_URL) {
+      if (options.routingFailure) throw new Error("routing provider failure");
+      if (!options.routingResponse)
+        return new Response("not found", { status: 404 });
+      return new Response(JSON.stringify(options.routingResponse), {
+        headers: { "content-type": "application/json" },
+      });
+    }
     const fixtureName = FIXTURE_URLS[url];
     if (!fixtureName) return new Response("not found", { status: 404 });
     if (options.failingFeed === fixtureName)
@@ -65,6 +76,10 @@ function dependencies(options: FixtureOptions = {}) {
     cache,
     discoveryUrl: DISCOVERY_URL,
     nowSeconds: () => NOW_SECONDS,
+    openRouteServiceApiKey:
+      options.routingResponse || options.routingFailure
+        ? "test-key"
+        : undefined,
   };
 }
 
@@ -96,6 +111,10 @@ describe("nearest bikeshare endpoint", () => {
     );
     expect(body.appleMapsPreviewUrl).toContain("maps.apple.com");
     expect(body.googleMapsPreviewUrl).toContain("google.com/maps");
+    expect(body.mapProvider).toBe("apple");
+    expect(body.mapPreviewUrl).toContain("maps.apple.com");
+    expect(body.distanceSource).toBe("straight_line");
+    expect(body.walkingTimeSeconds).toBeNull();
     expect(body.approximate).toBe(true);
     expect((body.topCandidates as unknown[]).length).toBe(5);
   });
@@ -108,6 +127,16 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.units).toBe("metric");
     expect(body.spokenMessage).toContain("kilometers");
     expect(body.spokenMessage).not.toContain("feet");
+  });
+
+  it("selects the configured Google Maps URLs", async () => {
+    const { body } = await responseJson(
+      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any&maps=google",
+    );
+
+    expect(body.mapProvider).toBe("google");
+    expect(body.mapPreviewUrl).toContain("google.com/maps");
+    expect(body.mapWalkingUrl).toContain("google.com/maps");
   });
 
   it("keeps exactly one thousand base units in the smaller unit", () => {
@@ -273,6 +302,87 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.distanceMeters).toBeLessThan(50);
   });
 
+  it("uses walking distance to rank the closest routed candidate", async () => {
+    const stationInformation = clone(fixture("station_information.json"));
+    (stationInformation.data as JsonRecord).stations = [
+      {
+        station_id: "station-electric",
+        name: "Far Station",
+        lat: 37.7672,
+        lon: -122.42,
+      },
+    ];
+    const stationStatus = clone(fixture("station_status.json"));
+    (stationStatus.data as JsonRecord).stations = [
+      {
+        station_id: "station-electric",
+        num_bikes_available: 2,
+        is_installed: 1,
+        is_renting: 1,
+        last_reported: 1700000000,
+        vehicle_types_available: [{ vehicle_type_id: "2", count: 2 }],
+      },
+    ];
+    const freeBikes = clone(fixture("free_bike_status.json"));
+    (freeBikes.data as JsonRecord).bikes = [
+      {
+        bike_id: "nearby-electric",
+        lat: 37.76027,
+        lon: -122.42,
+        is_reserved: 0,
+        is_disabled: 0,
+        vehicle_type_id: "2",
+        last_reported: 1700000000,
+      },
+    ];
+
+    const { body } = await handleRequestWithOptions(
+      {
+        overrides: {
+          "station_information.json": stationInformation,
+          "station_status.json": stationStatus,
+          "free_bike_status.json": freeBikes,
+        },
+        routingResponse: fixture("openrouteservice_matrix.json"),
+      },
+      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+    );
+
+    expect(body.selected).toMatchObject({
+      entityType: "station",
+      name: "Far Station",
+      availableCount: 2,
+      distanceMeters: 100,
+      distanceSource: "walking",
+      walkingTimeSeconds: 80,
+    });
+    expect(body.routingProvider).toBe("openrouteservice");
+    expect(body.approximate).toBe(false);
+  });
+
+  it("falls back to straight-line distance when the route response is invalid", async () => {
+    const { body } = await handleRequestWithOptions({
+      routingResponse: { distances: "invalid", durations: [] },
+    });
+
+    expect(body.distanceSource).toBe("straight_line");
+    expect(body.routingProvider).toBeNull();
+    expect(body.approximate).toBe(true);
+  });
+
+  it("keeps the full candidate list when a route is unavailable", async () => {
+    const { body } = await handleRequestWithOptions({
+      routingResponse: {
+        distances: [[null]],
+        durations: [[80]],
+      },
+    });
+
+    expect(body.distanceSource).toBe("straight_line");
+    expect(body.routingProvider).toBeNull();
+    expect(body.approximate).toBe(true);
+  });
+
   it("rejects stale live data", async () => {
     const staleDependencies = {
       ...dependencies(),
@@ -345,15 +455,30 @@ describe("nearest bikeshare endpoint", () => {
       message: "units must be imperial or metric.",
     });
   });
+
+  it("rejects an invalid map provider", async () => {
+    const response = await handleRequest(
+      new Request(
+        "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any&maps=bing",
+      ),
+      dependencies(),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "invalid_maps",
+      message: "maps must be apple or google.",
+    });
+  });
 });
 
-async function handleRequestWithOptions(options: FixtureOptions) {
-  const response = await handleRequest(
-    new Request(
-      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=electric",
-    ),
-    { ...dependencies(options) },
-  );
+async function handleRequestWithOptions(
+  options: FixtureOptions,
+  requestUrl = "https://worker.test/nearest?lat=37.76&lon=-122.42&type=electric",
+) {
+  const response = await handleRequest(new Request(requestUrl), {
+    ...dependencies(options),
+  });
   return { response, body: (await response.clone().json()) as JsonRecord };
 }
 

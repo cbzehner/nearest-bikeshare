@@ -1,14 +1,18 @@
 # Nearest Bikeshare
 
-Small personal prototype for finding an available Bay Wheels bike from Siri.
+Nearest Bikeshare is a small personal tool. It finds an available Bay Wheels bike through Siri.
 
-The Cloudflare Worker reads the official Bay Wheels GBFS 2.3 discovery feed at runtime. It follows only validated linked feeds, caches validated responses using each feed's `ttl`, and uses no database, account, Lyft login, scraping, analytics, or LLM.
+At run time, a Cloudflare Worker reads the official Bay Wheels General Bikeshare Feed Specification (GBFS) 2.3 discovery feed. The Worker validates each linked feed before it uses that feed. It caches each valid response for the feed's `ttl` value.
 
-The distance is a straight-line Haversine distance. The response always marks it as approximate because this prototype does not call a walking-routing service. The Shortcut opens an Apple Maps preview for the exact selected coordinates. The response also includes Google Maps preview and walking links, plus the official provider rental URL when Bay Wheels supplies one.
+The project does not use a database, user account, Lyft login, web scraping, analytics, or a large language model (LLM).
+
+The Worker uses OpenRouteService to compare walking distances for up to ten nearby candidates when `OPENROUTESERVICE_API_KEY` is set. If the key is missing or the route service fails, it uses a straight-line distance instead. The response marks that result as approximate. The Shortcut can open an Apple Maps or Google Maps preview. The response also includes walking links and the official provider rental URL when Bay Wheels supplies one.
 
 ## Local setup
 
-Requirements: Node.js 20 or newer and a Cloudflare account for deployment.
+You need Node.js 20 or newer. You also need a Cloudflare account to deploy the Worker.
+
+Install the project and run the checks:
 
 ```sh
 npm install
@@ -18,13 +22,15 @@ npm test
 npx wrangler deploy --dry-run
 ```
 
+For local walking routes, copy `.env.example` to `.env` and add your OpenRouteService key. The `.env` file is ignored by Git.
+
 Start the local Worker in one terminal:
 
 ```sh
 npm run dev -- --port 8787
 ```
 
-Test it from a second terminal:
+Test the Worker from a second terminal:
 
 ```sh
 curl 'http://localhost:8787/nearest?lat=37.7600&lon=-122.4200&type=any'
@@ -32,60 +38,97 @@ curl 'http://localhost:8787/nearest?lat=37.7600&lon=-122.4200&type=any&units=met
 curl -i 'http://localhost:8787/nearest?lat=91&lon=-122.42&type=any'
 ```
 
-The first two requests should return HTTP 200 JSON. The invalid-coordinate request should return HTTP 400. Stop the local Worker with `Ctrl-C`.
+The first two requests should return HTTP 200 with JSON. The request with invalid coordinates should return HTTP 400. Press `Ctrl-C` to stop the local Worker.
 
-The `type` query value is `electric`, `classic`, or `any`. If it is omitted, the Worker uses `any`. The Shortcut always sends `type=any`.
+### Query values
 
-The `units` query value is `imperial` or `metric`. If it is omitted, the Worker uses `imperial`. Imperial speech uses feet through 1,000 feet and miles above 1,000 feet. Metric speech uses meters through 1,000 meters and kilometers above 1,000 meters. The API still returns the approximate distance in `distanceMeters`.
+Set `type` to `electric`, `classic`, or `any`. The default is `any`. The Shortcut always sends `type=any`.
 
-The requested type is a preference. If no bike of that type is available, the Worker may return the other bike type and lowers `confidence` to `low`. A request never claims that a classic bike is an e-bike.
+Set `units` to `imperial` or `metric`. The default is `imperial`. Imperial speech uses feet through 1,000 feet and miles above 1,000 feet. Metric speech uses meters through 1,000 meters and kilometers above 1,000 meters. The API always returns `distanceMeters` in meters.
 
-The Shortcut uses `type=any`. In that mode, a nearby candidate wins over a much farther candidate; availability count breaks close ties. This keeps a single bike 30 meters away ahead of a station with several bikes 800 meters away.
+Set `maps` to `apple` or `google`. The default is `apple`. This setting controls the map preview and walking link in `mapPreviewUrl` and `mapWalkingUrl`.
+
+The requested bike type is a preference. If that type is not available, the Worker can return the other type. It then sets `confidence` to `low`. It never calls a classic bike an e-bike.
+
+For `type=any`, distance has the most weight. The number of available bikes breaks close ties. For example, one bike 30 meters away ranks above a station with several bikes 800 meters away.
+
+When walking routes are available, the Worker ranks the ten closest candidates by walking distance. When they are not available, it ranks all candidates by straight-line distance.
+
+OpenRouteService ranks the candidates. Apple Maps or Google Maps may choose a different walking path when it opens.
 
 ## Deploy
 
+Sign in to Cloudflare and deploy the Worker:
+
 ```sh
 npx wrangler login
+npx wrangler secret put OPENROUTESERVICE_API_KEY
 npx wrangler deploy
 ```
 
-Wrangler prints the deployed URL. Test it with:
+Paste the OpenRouteService key when Wrangler asks for it. Keep the key in a secret. Do not put it in `wrangler.jsonc` or commit it to Git.
+
+Wrangler prints the deployed URL. Test that URL:
 
 ```sh
 curl 'https://YOUR-WORKER.workers.dev/nearest?lat=37.7600&lon=-122.4200&type=any'
 ```
 
-Replace `YOUR-WORKER.workers.dev` with the URL printed by Wrangler. The deployed request should return HTTP 200 JSON with `selected`, `spokenMessage`, `units`, `topCandidates`, `feedFreshness`, `confidence`, Apple Maps preview and walking URLs, Google Maps preview and walking URLs, and the official `providerRentalUrl` when available. The Shortcut uses the deployed URL as `https://YOUR-WORKER.workers.dev/nearest`.
+Replace `YOUR-WORKER.workers.dev` with the URL from Wrangler. The request should return HTTP 200 with JSON. The JSON includes `selected`, `spokenMessage`, `units`, `topCandidates`, `feedFreshness`, and `confidence`. It also includes the selected map provider, walking distance data, Apple Maps and Google Maps URLs, and `providerRentalUrl` when the provider supplies one.
+
+Use `https://YOUR-WORKER.workers.dev/nearest` as the deployed URL in the Shortcut.
 
 ## Shortcut
 
-The exact action recipe is in [shortcut/Nearest Bikeshare.md](shortcut/Nearest%20Bikeshare.md). Build it once in the Shortcuts app, then say “Siri, nearest bikeshare”.
+Follow the action guide in [shortcut/Nearest Bikeshare.md](shortcut/Nearest%20Bikeshare.md). Build the Shortcut once. Then say, “Siri, nearest bikeshare.”
 
-The recipe gets the current location once, always asks the Worker for any available bike, and speaks the Worker-generated result. Electric bikes are spoken as “ee bike” so Siri does not say “eh-bike”. Set the literal `units=imperial` in the URL to `units=metric` for meters and kilometers. When a result exists, the recipe opens an Apple Maps preview at the selected bike or station; with no result, it speaks the no-results message and skips Maps. To use Google Maps instead, read `googleMapsPreviewUrl` in the final dictionary action. The Shortcut does not open `providerRentalUrl` because the current feed usually supplies a generic scan flow rather than a bike-specific app screen.
+The Shortcut gets your current location once. It requests any available bike and speaks the result. It uses “ee bike” so Siri does not pronounce e-bike as “eh-bike.”
 
-## Provider deep-link spike
+The Shortcut uses imperial units by default. Change `units=imperial` to `units=metric` in its URL to use meters and kilometers.
 
-The current official Bay Wheels `free_bike_status` feed includes `rental_uris.ios`, but the live feed currently returns the same URL for each sampled bike:
+When the Worker finds a result, the Shortcut opens the selected map app at the bike or station. When no bike is available, it speaks the no-results message and does not open Maps. Change `maps=apple` to `maps=google` in the Shortcut URL to use Google Maps.
+
+The Shortcut does not open `providerRentalUrl`. The live feed usually supplies a general scan link, not a link to one bike.
+
+## Provider deep links
+
+The official Bay Wheels `free_bike_status` feed includes `rental_uris.ios`. In our sample of live bikes, the feed returned the same URL for every bike:
 
 ```text
 https://sfo.lft.to/lastmile_qr_scan
 ```
 
-That URL opens the general Bay Wheels/Lyft scan flow. It does not identify the selected `bike_id`. Bay Wheels documents unlocking by scanning the QR code on the bike in the Lyft app. The GBFS specification describes a vehicle rental URI as a provider-supplied app link that should be specific to the individual vehicle when one is available.
+This URL opens the general Bay Wheels or Lyft scan flow. It does not identify the selected `bike_id`. Bay Wheels tells riders to use the Lyft app to scan the QR code on the bike. The GBFS specification says a vehicle rental URI should identify one vehicle when the provider supplies such a link.
 
-The Worker passes through the feed's iOS rental URI and does not append `bike_id` or construct an undocumented Lyft URL. This is the safe behavior for the current feed. If Bay Wheels later publishes a bike-specific `rental_uris.ios`, the Worker will return it without a code change. Until then, use the map preview for the exact selected bike or station and treat `providerRentalUrl` as the generic scan/unlock flow.
+The Worker returns the iOS rental URI from the feed without changes. It does not add `bike_id` or make an undocumented Lyft URL. If Bay Wheels later supplies a bike-specific `rental_uris.ios`, the Worker will return it without a code change.
 
-## Response shape
+Until then, use the map preview to find the selected bike or station. Treat `providerRentalUrl` as a general scan and unlock link.
 
-Successful responses include `selected`, the duplicated selected fields (`name`, `latitude`, `longitude`, `bikeType`, `availableCount`, `distanceMeters`), `spokenMessage`, `units`, `providerRentalUrl`, Apple Maps preview and walking URLs, Google Maps preview and walking URLs, `feedFreshness`, `confidence`, `approximate`, and the ordered `topCandidates` array with at most five entries. A no-result response has `selected: null` and HTTP 200. Invalid input returns HTTP 400. Required-feed failures return HTTP 503; a failed optional free-bike feed does not suppress station results.
+## API responses
 
-## Feed choices
+A successful result includes:
 
-This version supports Bay Wheels GBFS 2.3. It maps `human` to `classic` and `electric_assist` or `electric` to `electric`. Station counts use `vehicle_types_available` when present. Free bikes with a `station_id` are omitted from the free-floating list so a docked vehicle is not counted twice.
+- `selected`
+- the selected `name`, `latitude`, `longitude`, `bikeType`, `availableCount`, and `distanceMeters` at the top level
+- `distanceSource` and `walkingTimeSeconds`
+- `spokenMessage`, `units`, and `mapProvider`
+- `mapPreviewUrl` and `mapWalkingUrl`
+- `providerRentalUrl`
+- Apple Maps and Google Maps preview and walking URLs
+- `feedFreshness`, `confidence`, and `approximate`
+- up to five ordered entries in `topCandidates`
+
+A response with no result has `selected: null` and returns HTTP 200. Invalid input returns HTTP 400. A required feed failure returns HTTP 503. A failure in the optional free-floating bike feed does not remove station results. `distanceSource` is `walking` when OpenRouteService returns a route and `straight_line` when the Worker uses its fallback. `routingProvider` names the route service when walking data is available.
+
+## Feed handling
+
+This version supports Bay Wheels GBFS 2.3. It maps the GBFS type `human` to `classic`. It maps `electric_assist` and `electric` to `electric`.
+
+The Worker uses `vehicle_types_available` for station counts when that field is present. It leaves a free bike out of the free-floating list when the bike has a `station_id`. This prevents the Worker from counting a docked bike twice.
 
 ## Validation
 
-Run the full local validation with:
+Run all local checks:
 
 ```sh
 npm run format
@@ -94,4 +137,4 @@ npm test
 npx wrangler deploy --dry-run
 ```
 
-The test suite uses saved GBFS fixtures. It covers type preference, type-specific station availability, free-floating bikes, stale data, no availability, reserved and disabled bikes, duplicate prevention, malformed required feeds, optional-feed failure, provider failure, and invalid requests.
+The tests use saved GBFS and routing data. They cover bike-type preference, station counts by bike type, free-floating bikes, walking-distance ranking, straight-line fallback, stale data, no availability, reserved and disabled bikes, duplicate prevention, malformed required feeds, optional feed failure, provider failure, and invalid requests.

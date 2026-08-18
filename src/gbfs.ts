@@ -433,7 +433,7 @@ async function fetchPayload(
       try {
         return { payload: await cached.json(), fromCache: true };
       } catch {
-        // Ignore invalid cached content and refresh it from the provider.
+        // Ignore invalid cached data. Get fresh data from the provider.
       }
     }
   }
@@ -572,7 +572,7 @@ export async function loadSnapshot(
         dependencies,
       );
     } catch {
-      // Dockless data is optional for this prototype. Station results remain usable.
+      // Free-floating bike data is optional. Keep station results if this feed fails.
     }
   }
 

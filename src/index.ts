@@ -6,10 +6,12 @@ import {
   rankCandidates,
   toCandidateResponse,
 } from "./ranking";
+import { addWalkingDistances } from "./routing";
 import type {
   AppDependencies,
   ErrorResponse,
   Env,
+  MapProvider,
   NearestResponse,
   Query,
   RequestedBikeType,
@@ -42,6 +44,7 @@ function parseQuery(url: URL): Query | ErrorResponse {
   const longitude = Number(longitudeParameter);
   const type = url.searchParams.get("type") ?? "any";
   const units = url.searchParams.get("units") ?? "imperial";
+  const maps = url.searchParams.get("maps") ?? "apple";
   if (
     !latitudeParameter ||
     !Number.isFinite(latitude) ||
@@ -76,11 +79,18 @@ function parseQuery(url: URL): Query | ErrorResponse {
       message: "units must be imperial or metric.",
     };
   }
+  if (maps !== "apple" && maps !== "google") {
+    return {
+      error: "invalid_maps",
+      message: "maps must be apple or google.",
+    };
+  }
   return {
     latitude,
     longitude,
     requestedType: type,
     units: units as DistanceUnits,
+    mapProvider: maps as MapProvider,
   };
 }
 
@@ -102,6 +112,33 @@ function spokenMessage(
   const locationPhrase =
     candidate.entityType === "station" ? ` at ${candidate.name}` : "";
   return `The nearest available ${bikeLabel} is approximately ${distance.value} ${distance.unit} away${locationPhrase}. ${candidate.availableCount} ${bikeWord} available.`;
+}
+
+function mapUrls(
+  candidate: ReturnType<typeof toCandidateResponse>,
+  mapProvider: MapProvider,
+): { previewUrl: string; walkingUrl: string } {
+  return mapProvider === "apple"
+    ? {
+        previewUrl: candidate.appleMapsPreviewUrl,
+        walkingUrl: candidate.appleMapsWalkingUrl,
+      }
+    : {
+        previewUrl: candidate.googleMapsPreviewUrl,
+        walkingUrl: candidate.googleMapsWalkingUrl,
+      };
+}
+
+function approximationNote(
+  candidate: ReturnType<typeof toCandidateResponse> | null,
+): string {
+  if (!candidate || candidate.distanceSource === "straight_line") {
+    return "Walking route was not available. Distance is straight-line.";
+  }
+  if (candidate.walkingTimeSeconds === null) {
+    return "Walking distance is from OpenRouteService. Walking time is not available.";
+  }
+  return "Walking distance and time are estimated by OpenRouteService.";
 }
 
 export function formatDistance(
@@ -151,7 +188,13 @@ function emptyResponse(
     bikeType: null,
     availableCount: null,
     distanceMeters: null,
+    distanceSource: null,
+    walkingTimeSeconds: null,
     providerRentalUrl: null,
+    mapProvider: query.mapProvider,
+    mapPreviewUrl: null,
+    mapWalkingUrl: null,
+    routingProvider: null,
     appleMapsPreviewUrl: null,
     appleMapsWalkingUrl: null,
     googleMapsPreviewUrl: null,
@@ -159,8 +202,7 @@ function emptyResponse(
     feedFreshness: freshness,
     confidence: "low",
     approximate: true,
-    approximationNote:
-      "Distance is straight-line. Walking time is not available.",
+    approximationNote: approximationNote(null),
     requestedType: query.requestedType,
     topCandidates: [],
   };
@@ -200,11 +242,21 @@ export async function handleRequest(
       nowSeconds,
       staleAfterSeconds,
     );
-    const ranked = rankCandidates(candidates, parsedQuery.requestedType);
+    const initialRanked = rankCandidates(candidates, parsedQuery.requestedType);
+    const routingResult = await addWalkingDistances(
+      parsedQuery,
+      initialRanked,
+      dependencies,
+    );
+    const ranked = rankCandidates(
+      routingResult.candidates,
+      parsedQuery.requestedType,
+    );
     const selected = ranked[0];
     if (!selected) return jsonResponse(emptyResponse(parsedQuery, freshness));
 
     const selectedResponse = toCandidateResponse(selected);
+    const selectedMapUrls = mapUrls(selectedResponse, parsedQuery.mapProvider);
     const body: NearestResponse = {
       selected: selectedResponse,
       spokenMessage: spokenMessage(selectedResponse, parsedQuery.units),
@@ -215,16 +267,26 @@ export async function handleRequest(
       bikeType: selectedResponse.bikeType,
       availableCount: selectedResponse.availableCount,
       distanceMeters: selectedResponse.distanceMeters,
+      distanceSource: selectedResponse.distanceSource,
+      walkingTimeSeconds: selectedResponse.walkingTimeSeconds,
       providerRentalUrl: selectedResponse.providerRentalUrl,
+      mapProvider: parsedQuery.mapProvider,
+      mapPreviewUrl: selectedMapUrls.previewUrl,
+      mapWalkingUrl: selectedMapUrls.walkingUrl,
+      routingProvider:
+        selectedResponse.distanceSource === "walking"
+          ? "openrouteservice"
+          : null,
       appleMapsPreviewUrl: selectedResponse.appleMapsPreviewUrl,
       appleMapsWalkingUrl: selectedResponse.appleMapsWalkingUrl,
       googleMapsPreviewUrl: selectedResponse.googleMapsPreviewUrl,
       googleMapsWalkingUrl: selectedResponse.googleMapsWalkingUrl,
       feedFreshness: freshness,
       confidence: confidenceFor(selected, parsedQuery.requestedType),
-      approximate: true,
-      approximationNote:
-        "Distance is straight-line. Walking time is not available.",
+      approximate:
+        selectedResponse.distanceSource === "straight_line" ||
+        selectedResponse.walkingTimeSeconds === null,
+      approximationNote: approximationNote(selectedResponse),
       requestedType: parsedQuery.requestedType,
       topCandidates: ranked.slice(0, 5).map(toCandidateResponse),
     };
@@ -253,6 +315,7 @@ export default {
         caches as unknown as { default: NonNullable<AppDependencies["cache"]> }
       ).default,
       discoveryUrl: env.GBFS_DISCOVERY_URL,
+      openRouteServiceApiKey: env.OPENROUTESERVICE_API_KEY,
     });
   },
 };

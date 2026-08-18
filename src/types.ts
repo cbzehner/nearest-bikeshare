@@ -3,6 +3,8 @@ export type DistanceUnits = "imperial" | "metric";
 export type BikeType = Exclude<RequestedBikeType, "any">;
 export type EntityType = "station" | "bike";
 export type Confidence = "high" | "medium" | "low";
+export type MapProvider = "apple" | "google";
+export type DistanceSource = "walking" | "straight_line";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -76,6 +78,7 @@ export interface Query {
   longitude: number;
   requestedType: RequestedBikeType;
   units: DistanceUnits;
+  mapProvider: MapProvider;
 }
 
 export interface Candidate {
@@ -87,6 +90,8 @@ export interface Candidate {
   bikeType: BikeType;
   availableCount: number;
   distanceMeters: number;
+  distanceSource: DistanceSource;
+  walkingTimeSeconds: number | null;
   providerRentalUrl: string | null;
   appleMapsPreviewUrl: string;
   appleMapsWalkingUrl: string;
@@ -105,6 +110,8 @@ export interface CandidateResponse {
   bikeType: BikeType;
   availableCount: number;
   distanceMeters: number;
+  distanceSource: DistanceSource;
+  walkingTimeSeconds: number | null;
   providerRentalUrl: string | null;
   appleMapsPreviewUrl: string;
   appleMapsWalkingUrl: string;
@@ -130,14 +137,20 @@ export interface NearestResponse {
   bikeType: BikeType | null;
   availableCount: number | null;
   distanceMeters: number | null;
+  distanceSource: DistanceSource | null;
+  walkingTimeSeconds: number | null;
   providerRentalUrl: string | null;
+  mapProvider: MapProvider;
+  mapPreviewUrl: string | null;
+  mapWalkingUrl: string | null;
+  routingProvider: "openrouteservice" | null;
   appleMapsPreviewUrl: string | null;
   appleMapsWalkingUrl: string | null;
   googleMapsPreviewUrl: string | null;
   googleMapsWalkingUrl: string | null;
   feedFreshness: FeedFreshness;
   confidence: Confidence;
-  approximate: true;
+  approximate: boolean;
   approximationNote: string;
   requestedType: RequestedBikeType;
   topCandidates: CandidateResponse[];
@@ -159,8 +172,10 @@ export interface AppDependencies {
   nowSeconds?: () => number;
   discoveryUrl?: string;
   staleAfterSeconds?: number;
+  openRouteServiceApiKey?: string;
 }
 
 export interface Env {
   GBFS_DISCOVERY_URL?: string;
+  OPENROUTESERVICE_API_KEY?: string;
 }
