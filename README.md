@@ -86,7 +86,7 @@ The Worker origin is the public URL:
 https://nearest-bikeshare.hooks.workers.dev/
 ```
 
-That page is the short link to share. After you copy an iCloud link from the working Shortcut, put it in `SHORTCUT_SHARE_URL` in `wrangler.jsonc` and deploy. The page then shows **Add Shortcut**.
+That page is the short link to share. It is a styled add page: it explains the product, shows how it works, and offers **Add Shortcut**. After you copy an iCloud link from the working Shortcut, put it in `SHORTCUT_SHARE_URL` in `wrangler.jsonc` and deploy. The page then shows **Add Shortcut**.
 
 `GET /nearest` allows 10 requests per 60 seconds per client IP. Extra requests return a spoken retry message and do not open Maps. The Worker only ranks bikes for coordinates in the San Francisco Bay Area. A point outside that area gets a spoken no-result message and does not call Bay Wheels or OpenRouteService. A Bay Wheels outage also returns a spoken message so Siri can say it.
 

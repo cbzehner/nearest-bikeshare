@@ -660,8 +660,49 @@ describe("nearest bikeshare endpoint", () => {
     const html = await response.text();
 
     expect(html).toContain("https://www.icloud.com/shortcuts/abc123");
+    expect(html).toContain('href="https://www.icloud.com/shortcuts/abc123"');
     expect(html).toContain("Add Shortcut");
     expect(html).not.toContain("foo=1");
+  });
+
+  it("sends cacheable HTML headers on the landing page", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/"),
+      dependencies(),
+    );
+
+    expect(response.headers.get("content-type")).toBe(
+      "text/html; charset=utf-8",
+    );
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+  });
+
+  it("shows a config error when the Shortcut share URL is invalid", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/"),
+      dependencies({ shortcutShareUrl: "https://example.com/nope" }),
+    );
+    const html = await response.text();
+
+    expect(html).toContain("The Shortcut link is not configured correctly.");
+    expect(html).not.toContain("Add Shortcut");
+    expect(html).not.toContain("icloud.com/shortcuts");
+  });
+
+  it("includes the required public copy and no script", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/"),
+      dependencies(),
+    );
+    const html = await response.text();
+
+    expect(html).toContain("Bay Wheels");
+    expect(html).toContain("San Francisco Bay Area");
+    expect(html).toContain("There is no account.");
+    expect(html).toContain(
+      "The Worker uses your current location to find a nearby bike.",
+    );
+    expect(html).not.toContain("<script");
   });
 
   it("omits the add link when no Shortcut share URL is set", async () => {

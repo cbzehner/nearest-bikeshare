@@ -149,33 +149,156 @@ function shortcutShareHref(shareUrl: string | undefined): string {
   return `https://www.icloud.com/shortcuts/${match[1]}`;
 }
 
+const LANDING_CSS = `:root {
+  --bg: #f4f7fb;
+  --ink: #10213a;
+  --muted: #4a5a70;
+  --cta-bg: #0a3578;
+  --cta-fg: #ffffff;
+  --surface-notice: #f8eaea;
+  --ink-notice: #6b1c1c;
+  --focus: #0a3578;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #071526;
+    --ink: #f4f7fb;
+    --muted: #a8b6c8;
+    --cta-bg: #4d8cff;
+    --cta-fg: #071526;
+    --surface-notice: #3a1a1a;
+    --ink-notice: #f0c4c4;
+    --focus: #4d8cff;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  padding-top: calc(2rem + env(safe-area-inset-top, 0px));
+  padding-right: calc(1.25rem + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(1.25rem + env(safe-area-inset-left, 0px));
+}
+main { max-width: 22.5rem; margin: 0 auto; }
+header { text-align: center; }
+.mark { width: 72px; height: 72px; margin: 0 auto 1rem; }
+.mark svg { display: block; }
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.lede { margin: 0; font-size: 1.125rem; line-height: 1.4; color: var(--muted); }
+.platform { margin: 0.25rem 0 0; font-size: 0.9375rem; color: var(--muted); }
+.actions { margin: 1.75rem 0 0; }
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.25rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.875rem;
+  background: var(--cta-bg);
+  color: var(--cta-fg);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.notice {
+  margin: 1.75rem 0 0;
+  padding: 0.875rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--surface-notice);
+  color: var(--ink-notice);
+}
+section { margin-top: 2.25rem; }
+h2 { margin: 0 0 0.75rem; font-size: 1rem; font-weight: 650; }
+ol { margin: 0; padding-left: 1.25rem; }
+li + li { margin-top: 0.6rem; }
+footer { margin-top: 1.75rem; color: var(--muted); font-size: 0.9375rem; }
+footer p { margin: 0 0 0.75rem; }
+footer p:last-child { margin-bottom: 0; }`;
+
+function landingMarkup(actionHtml: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0A3578">
+  <meta name="description" content="Ask Siri for the nearest available Bay Wheels bike.">
+  <meta property="og:title" content="Nearest Bikeshare">
+  <meta property="og:description" content="Ask Siri for the nearest available Bay Wheels bike.">
+  <title>Nearest Bikeshare</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Crect width='1024' height='1024' rx='228' fill='%230A3578'/%3E%3C/svg%3E">
+  <style>${LANDING_CSS}</style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="mark" aria-hidden="true">
+        <!-- keep in sync with shortcut/nearest-bikeshare.svg -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="228" fill="#0A3578"/>
+          <path fill="#FFFFFF" d="M512 176C374 176 264 286 264 424C264 532 376 676 512 848C648 676 760 532 760 424C760 286 650 176 512 176Z"/>
+          <g fill="none" stroke="#00E05A" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="440" cy="418" r="44"/>
+            <circle cx="584" cy="418" r="44"/>
+            <path d="M440 418H478L458 338H568L584 418M478 418L458 338M478 418L568 338"/>
+            <path d="M436 328H480"/>
+            <path d="M568 338V314M546 314H598"/>
+          </g>
+          <circle cx="440" cy="418" r="7" fill="#00E05A"/>
+          <circle cx="584" cy="418" r="7" fill="#00E05A"/>
+        </svg>
+      </div>
+      <h1>Nearest Bikeshare</h1>
+      <p class="lede">Ask Siri for the nearest available Bay Wheels bike.</p>
+      <p class="platform">Works on iPhone.</p>
+    </header>
+    ${actionHtml}
+    <section aria-labelledby="how-heading">
+      <h2 id="how-heading">How it works</h2>
+      <ol>
+        <li>Add the Shortcut to your iPhone.</li>
+        <li>Say "Siri, nearest bikeshare."</li>
+        <li>Siri speaks the nearest available bike and opens Maps.</li>
+      </ol>
+    </section>
+    <footer>
+      <p>This tool covers Bay Wheels in the San Francisco Bay Area. There is no account.</p>
+      <p>The Worker uses your current location to find a nearby bike. It does not store that location.</p>
+    </footer>
+  </main>
+</body>
+</html>`;
+}
+
 function landingPage(shareUrl: string | undefined): Response {
   const configured = Boolean(shareUrl?.trim());
   const href = shortcutShareHref(shareUrl);
   if (configured && !href) {
     console.error("SHORTCUT_SHARE_URL is not a valid iCloud Shortcut link.");
   }
-  const addShortcut = href
-    ? `<p><a href="${escapeHtml(href)}">Add Shortcut</a></p>`
+  const actionHtml = href
+    ? `<p class="actions"><a class="button" href="${escapeHtml(href)}">Add Shortcut</a></p>`
     : configured
-      ? "<p>The Shortcut link is not configured correctly.</p>"
+      ? `<p class="notice" role="status">The Shortcut link is not configured correctly.</p>`
       : "";
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nearest Bikeshare</title>
-</head>
-<body>
-  <h1>Nearest Bikeshare</h1>
-  <p>Ask Siri for the nearest available Bay Wheels bike.</p>
-  ${addShortcut}
-  <p>This tool covers Bay Wheels in the San Francisco Bay Area. There is no account.</p>
-  <p>The Worker uses your current location to find a nearby bike. It does not store that location.</p>
-</body>
-</html>`;
-  return new Response(html, {
+  return new Response(landingMarkup(actionHtml), {
     status: 200,
     headers: {
       "content-type": "text/html; charset=utf-8",

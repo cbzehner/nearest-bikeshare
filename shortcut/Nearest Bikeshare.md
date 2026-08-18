@@ -1,6 +1,6 @@
 # Nearest Bikeshare Shortcut
 
-The public add page is `https://nearest-bikeshare.hooks.workers.dev/`. After this Shortcut works, use Share → Copy iCloud Link and put that URL in `SHORTCUT_SHARE_URL` so the page can offer **Add Shortcut**.
+The public add page is `https://nearest-bikeshare.hooks.workers.dev/`. It is a styled page with a how-it-works list and an **Add Shortcut** button. After this Shortcut works, use Share → Copy iCloud Link and put that URL in `SHORTCUT_SHARE_URL` so the page can offer **Add Shortcut**.
 
 Deploy the Worker before you build this personal Shortcut. Replace `WORKER_URL` with the deployed Worker URL. Do not include a trailing slash.
 
