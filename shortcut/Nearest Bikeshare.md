@@ -1,49 +1,54 @@
-# Nearest Bikeshare Shortcut
+# Rebuild the Shortcut
 
-The public add page is `https://nearest-bikeshare.hooks.workers.dev/`. It is a styled page with a how-it-works list and an **Add Shortcut** button. After this Shortcut works, use Share → Copy iCloud Link and put that URL in `SHORTCUT_SHARE_URL` so the page can offer **Add Shortcut**.
+End users should add the live Shortcut from [https://nearest-bikeshare.hooks.workers.dev/](https://nearest-bikeshare.hooks.workers.dev/). Use this page only to rebuild it.
 
-Deploy the Worker before you build this personal Shortcut. Replace `WORKER_URL` with the deployed Worker URL. Do not include a trailing slash.
+Deploy the Worker first. In the URL below, replace `WORKER_URL` with the deployed origin and no trailing slash.
 
-The Worker accepts 10 requests per 60 seconds per IP. Extra requests and Bay Wheels outages still return JSON with `spokenMessage` and an empty `mapPreviewUrl`, so Siri can speak the result. It only ranks bikes in the San Francisco Bay Area. It uses your current location to find a bike and does not store that location.
+The live copy uses `https://nearest-bikeshare.hooks.workers.dev`.
 
-Choose the built-in bicycle symbol and dark-blue color. The [icon concept](nearest-bikeshare.svg) is reference art. The Shortcut does not contain this custom image.
+## What the Shortcut must do
 
-## Build the Shortcut
+1. Get the current location once.
+2. `GET WORKER_URL/nearest?lat=…&lon=…&type=any&units=imperial&maps=apple`
+3. Speak `spokenMessage`.
+4. Open `mapPreviewUrl` only when that field has a value.
 
-1. Add **Get Current Location** once.
-2. Add **Get Details of Locations**. Select `Latitude` and use the current location as its input.
-3. Add a second **Get Details of Locations**. Select `Longitude` and use the same current location as its input.
-4. Add a **Text** action with this value:
+Do not call **Get Current Location** twice. Do not open `providerRentalUrl`.
+
+A 200 body with an empty `mapPreviewUrl` is a normal no-map result (no bikes, outside the Bay Area, rate limit, or a Bay Wheels outage). Speak the message. Do not open Maps.
+
+## Icon
+
+Use the built-in bicycle symbol and dark blue. [nearest-bikeshare.svg](nearest-bikeshare.svg) is reference art for the public page. The Shortcut does not embed that image.
+
+## Actions
+
+1. **Get Current Location** once.
+2. **Get Details of Locations** → `Latitude`, input = that location.
+3. **Get Details of Locations** → `Longitude`, same location.
+4. **Text**:
 
    ```text
    WORKER_URL/nearest?lat=LATITUDE&lon=LONGITUDE&type=any&units=imperial&maps=apple
    ```
 
-   Replace `LATITUDE` and `LONGITUDE` with the variables from the two location detail actions.
+   Insert the two detail outputs in place of `LATITUDE` and `LONGITUDE`. Both tokens must point at the **Get Current Location** action. If a token says “Variable not available,” the Worker gets empty coordinates.
 
-   Keep `units=imperial` for feet and miles. Change it to `units=metric` for meters and kilometers. This value stays in the Shortcut, so the Shortcut does not ask for units each time.
+   Change `units=imperial` to `units=metric` for meters and kilometers. Change `maps=apple` to `maps=google` for Google Maps. Keep those values in the URL. Do not ask for them on each run.
 
-   Keep `maps=apple` to open Apple Maps. Change it to `maps=google` to open Google Maps.
-
-5. Add **Get Contents of URL**. Use the Text action as the URL and set the method to `GET`.
-6. Add **Get Dictionary Value**. Read `spokenMessage` from the contents of the URL.
-7. Add **Speak Text**. Use `spokenMessage` as its input. This keeps the distance unit and singular or plural wording in one message.
-8. Add **Get Dictionary Value**. Read `mapPreviewUrl` from the contents of the URL.
-9. Add an **If** action. Set its condition to `Dictionary Value` **has any value**.
-10. In the **If** branch, add **Open URLs**. Use `Dictionary Value` as its input.
-
-The last action opens the selected map app at the exact bike or station. The `maps` value in the URL selects Apple Maps or Google Maps. Keep this value in the Shortcut. Do not ask for it during each run.
-
-When the OpenRouteService key is available, the Worker compares walking distances for up to ten unique nearby places. The response uses `distanceSource=walking` for places that received a route. If routing is not available for a place, that place keeps a straight-line distance.
-
-OpenRouteService ranks the candidates. Apple Maps or Google Maps may choose a different walking path when it opens.
-
-The response also includes `providerRentalUrl`. Do not open it in this Shortcut. The live provider link usually opens a general scan flow, not details for one bike.
-
-## No result or request failure
-
-When no bike is available, the request is rate-limited, or Bay Wheels is down, `spokenMessage` explains the result and `mapPreviewUrl` is empty. The **If** action does not open Maps.
+5. **Get Contents of URL**. Method `GET`. URL = the Text action.
+6. **Get Dictionary Value** `spokenMessage`.
+7. **Speak Text** that value.
+8. **Get Dictionary Value** `mapPreviewUrl`.
+9. **If** that value **has any value** → **Open URLs**.
 
 If **Get Contents of URL** reports a network error, run the Shortcut again.
 
-Do not add another **Get Current Location** action. Do not add a final **Text** action with a provider URL.
+## Publish a new share link
+
+1. Confirm the Shortcut works on an iPhone.
+2. Share → **Copy iCloud Link**.
+3. Put that URL in `SHORTCUT_SHARE_URL` in `wrangler.jsonc`.
+4. Deploy the Worker.
+
+The public page then points **Add Shortcut** at the new link.
