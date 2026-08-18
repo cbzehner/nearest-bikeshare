@@ -167,22 +167,34 @@ function parseRentalUris(
     const uri = value[key];
     if (uri !== undefined) {
       const parsed = requiredString(uri, `rental_uris.${key}`, feedName);
-      if (!isAllowedRentalUri(parsed, key))
-        throw new FeedError(`invalid rental_uris.${key}`, feedName);
+      if (!isAllowedRentalUri(parsed, key)) continue;
       result[key] = parsed;
     }
   }
   return Object.keys(result).length === 0 ? undefined : result;
 }
 
+const ALLOWED_RENTAL_HTTPS_HOSTS = new Set([
+  "lft.to",
+  "sfo.lft.to",
+  "lyft.com",
+  "www.lyft.com",
+  "baywheels.com",
+  "www.baywheels.com",
+]);
+
 function isAllowedRentalUri(value: string, field: "ios" | "web"): boolean {
   try {
     const url = new URL(value);
-    const allowedProtocols =
-      field === "web"
-        ? new Set(["http:", "https:"])
-        : new Set(["http:", "https:", "lyft:", "baywheels:"]);
-    return allowedProtocols.has(url.protocol);
+    if (
+      field === "ios" &&
+      (url.protocol === "lyft:" || url.protocol === "baywheels:")
+    ) {
+      return true;
+    }
+    return (
+      url.protocol === "https:" && ALLOWED_RENTAL_HTTPS_HOSTS.has(url.hostname)
+    );
   } catch {
     return false;
   }
@@ -463,6 +475,10 @@ async function fetchPayload(
   const contentType = response.headers.get("content-type");
   if (contentType && !contentType.toLowerCase().includes("json")) {
     throw new FeedError("provider returned a non-JSON content type", feedName);
+  }
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_FEED_BYTES) {
+    throw new FeedError("provider response is too large", feedName);
   }
   const text = await response.text();
   if (new TextEncoder().encode(text).byteLength > MAX_FEED_BYTES) {

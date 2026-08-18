@@ -178,6 +178,7 @@ export interface AppDependencies {
   staleAfterSeconds?: number;
   openRouteServiceApiKey?: string;
   rateLimiter?: RateLimiter;
+  routingRateLimiter?: RateLimiter;
   clientIp?: string;
   shortcutShareUrl?: string;
 }
@@ -187,4 +188,5 @@ export interface Env {
   OPENROUTESERVICE_API_KEY?: string;
   SHORTCUT_SHARE_URL?: string;
   NEAREST_RATE_LIMITER?: RateLimiter;
+  ROUTING_RATE_LIMITER?: RateLimiter;
 }

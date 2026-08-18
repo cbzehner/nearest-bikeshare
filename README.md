@@ -6,22 +6,22 @@ A Siri Shortcut and Cloudflare Worker that find a nearby Bay Wheels bike.
 
 On iPhone, tap **Add Shortcut**, then say “Siri, nearest bikeshare.”
 
-|          |                                                 |
-| -------- | ----------------------------------------------- |
-| Area     | San Francisco Bay Area (Bay Wheels only)        |
-| Account  | None                                            |
-| Location | Used to rank bikes. Not stored.                 |
-| Maps     | Apple Maps by default. Google Maps is optional. |
+|          |                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------- |
+| Area     | San Francisco Bay Area (Bay Wheels only)                                                  |
+| Account  | None                                                                                      |
+| Location | Used to rank bikes. Not kept in a database. Walking estimates may go to OpenRouteService. |
+| Maps     | Apple Maps by default. Google Maps is optional.                                           |
 
 ## How it works
 
 ```text
-iPhone Shortcut  →  GET /nearest?lat=&lon=  →  Worker
-     ↑                                          |
-     speak + open Maps                    GBFS + optional walking routes
+iPhone Shortcut  →  POST /nearest { lat, lon }  →  Worker
+     ↑                                               |
+     speak + open Maps                         GBFS + optional walking routes
 ```
 
-1. The Shortcut reads the current location once and calls the Worker.
+1. The Shortcut reads the current location once and POSTs it as JSON. The coordinates are not put in the URL.
 2. The Worker loads official Bay Wheels GBFS 2.3 feeds (stations and free bikes).
 3. It drops stale, reserved, disabled, and empty candidates.
 4. If an OpenRouteService key is set, it ranks up to ten unique nearby places by walking distance. Otherwise it ranks by straight-line distance.
@@ -33,7 +33,7 @@ There is no database, user account, Lyft login, scraper, analytics, or LLM.
 
 | Path                                                               | Role                                     |
 | ------------------------------------------------------------------ | ---------------------------------------- |
-| [`src/index.ts`](src/index.ts)                                     | `GET /` landing page and `GET /nearest`  |
+| [`src/index.ts`](src/index.ts)                                     | `GET /` landing page and `POST /nearest` |
 | [`src/gbfs.ts`](src/gbfs.ts)                                       | Feed discovery, validation, cache        |
 | [`src/ranking.ts`](src/ranking.ts)                                 | Filter and rank candidates               |
 | [`src/routing.ts`](src/routing.ts)                                 | Optional OpenRouteService walking matrix |
@@ -58,7 +58,9 @@ npm run dev -- --port 8787
 ```
 
 ```sh
-curl 'http://localhost:8787/nearest?lat=37.7600&lon=-122.4200&type=any'
+curl -sS -X POST 'http://localhost:8787/nearest' \
+  -H 'content-type: application/json' \
+  -d '{"lat":37.7600,"lon":-122.4200,"type":"any"}'
 ```
 
 A Mission District coordinate should return HTTP 200 JSON. A New York coordinate should return a Bay Area-only spoken message. Invalid `lat` should return HTTP 400.
@@ -67,16 +69,26 @@ Walking routes need a local key. Copy [`.env.example`](.env.example) to `.env` a
 
 ## API
 
-`GET /nearest`
+`POST /nearest` with `Content-Type: application/json`:
 
-| Query        | Values                       | Default    |
+```json
+{
+  "lat": 37.76,
+  "lon": -122.42,
+  "type": "any",
+  "units": "imperial",
+  "maps": "apple"
+}
+```
+
+| Field        | Values                       | Default    |
 | ------------ | ---------------------------- | ---------- |
 | `lat`, `lon` | Required numbers             | —          |
 | `type`       | `any`, `electric`, `classic` | `any`      |
 | `units`      | `imperial`, `metric`         | `imperial` |
 | `maps`       | `apple`, `google`            | `apple`    |
 
-The live Shortcut sends `type=any&units=imperial&maps=apple`.
+The live Shortcut sends `type=any`, `units=imperial`, and `maps=apple`. A GET to `/nearest` does not look up a bike. It tells the user to add the current Shortcut.
 
 A successful body includes `selected`, `spokenMessage`, `mapPreviewUrl`, `distanceSource`, `topCandidates` (up to five), and feed freshness. `distanceMeters` is always meters. Speech uses feet or miles (imperial) and meters or kilometers (metric), with a switch at 1,000 of the smaller unit.
 
@@ -84,9 +96,9 @@ A successful body includes `selected`, `spokenMessage`, `mapPreviewUrl`, `distan
 | ---------------------------------------------------- | ---- | ----------------------------------------------------------------------- |
 | Bike found                                           | 200  | Speaks the result. Opens Maps.                                          |
 | No bike, out of area, rate limit, or Bay Wheels down | 200  | Speaks `spokenMessage`. `mapPreviewUrl` is empty, so Maps stays closed. |
-| Bad query                                            | 400  | Shortcut sees a request error.                                          |
+| Bad body                                             | 400  | Shortcut sees a request error.                                          |
 
-`GET /nearest` allows 10 requests per 60 seconds per client IP. `/` is not rate-limited.
+`POST /nearest` allows 10 requests per 60 seconds per client IP. Walking-route calls also have a global cap of 40 per 60 seconds. `/` is not rate-limited.
 
 `type` is a preference. If that type is missing, the Worker may return the other type and set `confidence` to `low`. It never calls a classic bike an e-bike. For `type=any`, distance wins; availability breaks close ties.
 

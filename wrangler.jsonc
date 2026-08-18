@@ -15,5 +15,13 @@
         "period": 60,
       },
     },
+    {
+      "name": "ROUTING_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 40,
+        "period": 60,
+      },
+    },
   ],
 }

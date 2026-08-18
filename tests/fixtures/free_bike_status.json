@@ -9,7 +9,7 @@
         "is_disabled": 0,
         "vehicle_type_id": "2",
         "last_reported": 1700000000,
-        "rental_uris": { "ios": "https://example.test/rent/free-electric" }
+        "rental_uris": { "ios": "https://sfo.lft.to/lastmile_qr_scan" }
       },
       {
         "bike_id": "free-classic",

@@ -6,14 +6,14 @@
         "name": "18th Street",
         "lat": 37.76,
         "lon": -122.42,
-        "rental_uris": { "ios": "https://example.test/rent/station-electric" }
+        "rental_uris": { "ios": "https://sfo.lft.to/lastmile_qr_scan" }
       },
       {
         "station_id": "station-classic",
         "name": "Mission Station",
         "lat": 37.7605,
         "lon": -122.42,
-        "rental_uris": { "web": "https://example.test/rent/station-classic" }
+        "rental_uris": { "web": "https://sfo.lft.to/lastmile_qr_scan" }
       },
       {
         "station_id": "station-mixed",

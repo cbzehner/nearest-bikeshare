@@ -30,6 +30,15 @@ const OUT_OF_AREA_SPOKEN_MESSAGE =
   "Nearest Bikeshare only covers Bay Wheels in the San Francisco Bay Area.";
 const OUT_OF_AREA_NOTE =
   "This tool only covers Bay Wheels in the San Francisco Bay Area.";
+const GET_NEAREST_SPOKEN_MESSAGE =
+  "This Shortcut is out of date. Open nearest-bikeshare.hooks.workers.dev and add it again.";
+const SECURITY_HEADERS = {
+  "content-security-policy":
+    "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  "referrer-policy": "no-referrer",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+};
 
 function jsonResponse(
   body: unknown,
@@ -41,6 +50,7 @@ function jsonResponse(
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...SECURITY_HEADERS,
       ...extraHeaders,
     },
   });
@@ -55,16 +65,53 @@ function errorResponse(
   return jsonResponse(body, status);
 }
 
-function parseQuery(url: URL): Query | ErrorResponse {
-  const latitudeParameter = url.searchParams.get("lat");
-  const longitudeParameter = url.searchParams.get("lon");
-  const latitude = Number(latitudeParameter);
-  const longitude = Number(longitudeParameter);
-  const type = url.searchParams.get("type") ?? "any";
-  const units = url.searchParams.get("units") ?? "imperial";
-  const maps = url.searchParams.get("maps") ?? "apple";
+function readCoordinate(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim() !== "") return Number(value);
+  return undefined;
+}
+
+function readText(value: unknown, fallback: string): string {
+  return typeof value === "string" && value !== "" ? value : fallback;
+}
+
+async function parseNearestBody(
+  request: Request,
+): Promise<Query | ErrorResponse> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("json")) {
+    return {
+      error: "invalid_body",
+      message: "Send a JSON object with lat and lon.",
+    };
+  }
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return {
+      error: "invalid_body",
+      message: "Send a JSON object with lat and lon.",
+    };
+  }
   if (
-    !latitudeParameter ||
+    typeof payload !== "object" ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
+    return {
+      error: "invalid_body",
+      message: "Send a JSON object with lat and lon.",
+    };
+  }
+  const record = payload as Record<string, unknown>;
+  const latitude = readCoordinate(record.lat);
+  const longitude = readCoordinate(record.lon);
+  const type = readText(record.type, "any");
+  const units = readText(record.units, "imperial");
+  const maps = readText(record.maps, "apple");
+  if (
+    latitude === undefined ||
     !Number.isFinite(latitude) ||
     latitude < -90 ||
     latitude > 90
@@ -75,7 +122,7 @@ function parseQuery(url: URL): Query | ErrorResponse {
     };
   }
   if (
-    !longitudeParameter ||
+    longitude === undefined ||
     !Number.isFinite(longitude) ||
     longitude < -180 ||
     longitude > 180
@@ -130,7 +177,8 @@ function escapeHtml(value: string): string {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function shortcutShareHref(shareUrl: string | undefined): string {
@@ -280,7 +328,7 @@ function landingMarkup(actionHtml: string): string {
     </section>
     <footer>
       <p>This tool covers Bay Wheels in the San Francisco Bay Area. There is no account.</p>
-      <p>The Worker uses your current location to find a nearby bike. It does not store that location.</p>
+      <p>The Worker uses your current location to find a nearby bike. It does not keep a location database. Walking estimates may be sent to OpenRouteService.</p>
     </footer>
   </main>
 </body>
@@ -303,6 +351,7 @@ function landingPage(shareUrl: string | undefined): Response {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "public, max-age=300",
+      ...SECURITY_HEADERS,
     },
   });
 }
@@ -444,19 +493,31 @@ export async function handleRequest(
   dependencies: AppDependencies,
 ): Promise<Response> {
   const url = new URL(request.url);
-  if (request.method !== "GET")
-    return errorResponse(
-      "method_not_allowed",
-      "Use GET / or GET /nearest.",
-      405,
-    );
-  if (url.pathname === "/") return landingPage(dependencies.shortcutShareUrl);
+  if (url.pathname === "/") {
+    if (request.method !== "GET")
+      return errorResponse("method_not_allowed", "Use GET /.", 405);
+    return landingPage(dependencies.shortcutShareUrl);
+  }
   if (url.pathname !== "/nearest")
-    return errorResponse("not_found", "Use GET / or GET /nearest.", 404);
+    return errorResponse("not_found", "Use GET / or POST /nearest.", 404);
+  if (request.method === "GET") {
+    const now = (
+      dependencies.nowSeconds ?? (() => Math.floor(Date.now() / 1000))
+    )();
+    return jsonResponse({
+      ...emptyResponse(fallbackQuery(), unusedFreshness(now)),
+      spokenMessage: GET_NEAREST_SPOKEN_MESSAGE,
+      error: "method_not_allowed",
+      message: "Use POST /nearest with a JSON body.",
+    });
+  }
+  if (request.method !== "POST")
+    return errorResponse("method_not_allowed", "Use POST /nearest.", 405);
 
   const nowSeconds = (
     dependencies.nowSeconds ?? (() => Math.floor(Date.now() / 1000))
   )();
+  let allowWalkingRoutes = true;
   if (dependencies.rateLimiter) {
     try {
       const { success } = await dependencies.rateLimiter.limit({
@@ -474,10 +535,12 @@ export async function handleRequest(
           { "retry-after": String(RATE_LIMIT_RETRY_AFTER_SECONDS) },
         );
       }
-    } catch {}
+    } catch {
+      allowWalkingRoutes = false;
+    }
   }
 
-  const parsedQuery = parseQuery(url);
+  const parsedQuery = await parseNearestBody(request);
   if (isErrorResponse(parsedQuery)) return jsonResponse(parsedQuery, 400);
   if (!isInServiceArea(parsedQuery.latitude, parsedQuery.longitude)) {
     return jsonResponse({
@@ -485,6 +548,17 @@ export async function handleRequest(
       spokenMessage: OUT_OF_AREA_SPOKEN_MESSAGE,
       approximationNote: OUT_OF_AREA_NOTE,
     });
+  }
+
+  if (allowWalkingRoutes && dependencies.routingRateLimiter) {
+    try {
+      const { success } = await dependencies.routingRateLimiter.limit({
+        key: "openrouteservice",
+      });
+      if (!success) allowWalkingRoutes = false;
+    } catch {
+      allowWalkingRoutes = false;
+    }
   }
 
   const staleAfterSeconds =
@@ -509,7 +583,12 @@ export async function handleRequest(
     const routingResult = await addWalkingDistances(
       parsedQuery,
       initialRanked,
-      dependencies,
+      {
+        ...dependencies,
+        openRouteServiceApiKey: allowWalkingRoutes
+          ? dependencies.openRouteServiceApiKey
+          : undefined,
+      },
     );
     const ranked = rankCandidates(
       routingResult.candidates,
@@ -581,6 +660,7 @@ export default {
       discoveryUrl: env.GBFS_DISCOVERY_URL,
       openRouteServiceApiKey: env.OPENROUTESERVICE_API_KEY,
       rateLimiter: env.NEAREST_RATE_LIMITER,
+      routingRateLimiter: env.ROUTING_RATE_LIMITER,
       clientIp: request.headers.get("cf-connecting-ip") ?? "unknown",
       shortcutShareUrl: env.SHORTCUT_SHARE_URL,
     });

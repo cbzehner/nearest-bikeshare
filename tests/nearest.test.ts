@@ -43,6 +43,7 @@ interface FixtureOptions {
   routingResponse?: JsonRecord;
   routingFailure?: boolean;
   rateLimiter?: RateLimiter;
+  routingRateLimiter?: RateLimiter;
   shortcutShareUrl?: string;
 }
 
@@ -83,15 +84,27 @@ function dependencies(options: FixtureOptions = {}) {
         ? "test-key"
         : undefined,
     rateLimiter: options.rateLimiter,
+    routingRateLimiter: options.routingRateLimiter,
     clientIp: "203.0.113.10",
     shortcutShareUrl: options.shortcutShareUrl,
   };
 }
 
-async function responseJson(
-  requestUrl = "https://worker.test/nearest?lat=37.76&lon=-122.42&type=electric",
-) {
-  const response = await handleRequest(new Request(requestUrl), dependencies());
+function nearestRequest(fields: Record<string, unknown> = {}): Request {
+  return new Request("https://worker.test/nearest", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      lat: 37.76,
+      lon: -122.42,
+      type: "electric",
+      ...fields,
+    }),
+  });
+}
+
+async function responseJson(fields: Record<string, unknown> = {}) {
+  const response = await handleRequest(nearestRequest(fields), dependencies());
   return { response, body: (await response.json()) as JsonRecord };
 }
 
@@ -111,9 +124,7 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.spokenMessage).toContain("ee bike");
     expect(body.spokenMessage).toContain("available");
     expect(body.units).toBe("imperial");
-    expect(body.providerRentalUrl).toContain(
-      "example.test/rent/station-electric",
-    );
+    expect(body.providerRentalUrl).toContain("sfo.lft.to/lastmile_qr_scan");
     expect(body.appleMapsPreviewUrl).toContain("maps.apple.com");
     expect(body.googleMapsPreviewUrl).toContain("google.com/maps");
     expect(body.mapProvider).toBe("apple");
@@ -125,9 +136,12 @@ describe("nearest bikeshare endpoint", () => {
   });
 
   it("uses metric units and switches to kilometers over one thousand meters", async () => {
-    const { body } = await responseJson(
-      "https://worker.test/nearest?lat=37.78&lon=-122.42&type=any&units=metric",
-    );
+    const { body } = await responseJson({
+      lat: 37.78,
+      lon: -122.42,
+      type: "any",
+      units: "metric",
+    });
 
     expect(body.units).toBe("metric");
     expect(body.spokenMessage).toContain("kilometers");
@@ -135,9 +149,10 @@ describe("nearest bikeshare endpoint", () => {
   });
 
   it("selects the configured Google Maps URLs", async () => {
-    const { body } = await responseJson(
-      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any&maps=google",
-    );
+    const { body } = await responseJson({
+      type: "any",
+      maps: "google",
+    });
 
     expect(body.mapProvider).toBe("google");
     expect(body.mapPreviewUrl).toContain("google.com/maps");
@@ -162,7 +177,7 @@ describe("nearest bikeshare endpoint", () => {
     (emptyBikes.data as JsonRecord).bikes = [];
     const { body } = await handleRequestWithOverrides(
       { "free_bike_status.json": emptyBikes },
-      "https://worker.test/nearest?lat=37.7605&lon=-122.42&type=electric",
+      { lat: 37.7605, lon: -122.42, type: "electric" },
     );
 
     expect(body.bikeType).toBe("electric");
@@ -178,7 +193,7 @@ describe("nearest bikeshare endpoint", () => {
     }
     const { body } = await handleRequestWithOverrides(
       { "station_status.json": emptyStatus },
-      "https://worker.test/nearest?lat=37.759&lon=-122.42&type=classic",
+      { lat: 37.759, lon: -122.42, type: "classic" },
     );
 
     expect(body.bikeType).toBe("classic");
@@ -198,7 +213,7 @@ describe("nearest bikeshare endpoint", () => {
     }
     const { body } = await handleRequestWithOverrides(
       { "station_status.json": emptyStatus },
-      "https://worker.test/nearest?lat=37.7605&lon=-122.42&type=electric",
+      { lat: 37.7605, lon: -122.42, type: "electric" },
     );
 
     expect(body.name).toBe("Available e-bike");
@@ -208,9 +223,11 @@ describe("nearest bikeshare endpoint", () => {
   });
 
   it("uses type-specific counts for a mixed station", async () => {
-    const { body } = await responseJson(
-      "https://worker.test/nearest?lat=37.761&lon=-122.421&type=electric",
-    );
+    const { body } = await responseJson({
+      lat: 37.761,
+      lon: -122.421,
+      type: "electric",
+    });
     const mixedCandidate = (body.topCandidates as JsonRecord[]).find(
       (candidate) => candidate.name === "Mixed Station",
     );
@@ -222,9 +239,7 @@ describe("nearest bikeshare endpoint", () => {
   });
 
   it("filters reserved and disabled bikes and avoids docked duplicates", async () => {
-    const { body } = await responseJson(
-      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
-    );
+    const { body } = await responseJson({ type: "any" });
     const ids = (body.topCandidates as JsonRecord[]).map(
       (candidate) => candidate.id,
     );
@@ -296,7 +311,7 @@ describe("nearest bikeshare endpoint", () => {
         "station_status.json": stationStatus,
         "free_bike_status.json": freeBikes,
       },
-      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+      { type: "any" },
     );
 
     expect(body.selected).toMatchObject({
@@ -350,7 +365,7 @@ describe("nearest bikeshare endpoint", () => {
         },
         routingResponse: fixture("openrouteservice_matrix.json"),
       },
-      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+      { type: "any" },
     );
 
     expect(body.selected).toMatchObject({
@@ -421,7 +436,7 @@ describe("nearest bikeshare endpoint", () => {
           durations: [[240, null]],
         },
       },
-      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+      { type: "any" },
     );
 
     expect(body.selected).toMatchObject({
@@ -470,7 +485,7 @@ describe("nearest bikeshare endpoint", () => {
           durations: [[400, 400, 400, 400, 400, 60]],
         },
       },
-      "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+      { type: "any" },
     );
 
     expect(body.selected).toMatchObject({
@@ -487,7 +502,7 @@ describe("nearest bikeshare endpoint", () => {
       nowSeconds: () => NOW_SECONDS + 301,
     };
     const response = await handleRequest(
-      new Request("https://worker.test/nearest?lat=37.76&lon=-122.42&type=any"),
+      nearestRequest({ type: "any" }),
       staleDependencies,
     );
     const body = (await response.json()) as JsonRecord;
@@ -530,7 +545,7 @@ describe("nearest bikeshare endpoint", () => {
 
   it("returns 400 for invalid coordinates and type", async () => {
     const response = await handleRequest(
-      new Request("https://worker.test/nearest?lat=91&lon=-122&type=scooter"),
+      nearestRequest({ lat: 91, lon: -122, type: "scooter" }),
       dependencies(),
     );
 
@@ -543,9 +558,7 @@ describe("nearest bikeshare endpoint", () => {
 
   it("rejects an invalid distance unit", async () => {
     const response = await handleRequest(
-      new Request(
-        "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any&units=feet",
-      ),
+      nearestRequest({ type: "any", units: "feet" }),
       dependencies(),
     );
 
@@ -558,9 +571,7 @@ describe("nearest bikeshare endpoint", () => {
 
   it("rejects an invalid map provider", async () => {
     const response = await handleRequest(
-      new Request(
-        "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any&maps=bing",
-      ),
+      nearestRequest({ type: "any", maps: "bing" }),
       dependencies(),
     );
 
@@ -573,7 +584,7 @@ describe("nearest bikeshare endpoint", () => {
 
   it("speaks a retry message when the rate limiter denies the request", async () => {
     const response = await handleRequest(
-      new Request("https://worker.test/nearest?lat=91&lon=-122.42&type=any"),
+      nearestRequest({ lat: 91, type: "any" }),
       dependencies({
         rateLimiter: {
           async limit() {
@@ -592,19 +603,6 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.spokenMessage).toContain("Try again in a minute");
   });
 
-  it("continues the lookup when the rate limiter throws", async () => {
-    const { response, body } = await handleRequestWithOptions({
-      rateLimiter: {
-        async limit() {
-          throw new Error("limiter unavailable");
-        },
-      },
-    });
-
-    expect(response.status).toBe(200);
-    expect(body.selected).not.toBeNull();
-  });
-
   it("keeps a successful path when the rate limiter allows the request", async () => {
     const { response, body } = await handleRequestWithOptions({
       rateLimiter: {
@@ -621,7 +619,7 @@ describe("nearest bikeshare endpoint", () => {
   it("returns a Bay Area message without fetching feeds for an out-of-area point", async () => {
     const { response, body } = await handleRequestWithOptions(
       { failingFeed: "station_status.json" },
-      "https://worker.test/nearest?lat=40.71&lon=-74.01&type=any",
+      { lat: 40.71, lon: -74.01, type: "any" },
     );
 
     expect(response.status).toBe(200);
@@ -647,7 +645,7 @@ describe("nearest bikeshare endpoint", () => {
     const html = await response.text();
     expect(html).toContain("Nearest Bikeshare");
     expect(html).toContain(shareUrl);
-    expect(html).toContain("does not store that location");
+    expect(html).toContain("does not keep a location database");
   });
 
   it("accepts an iCloud share URL with a trailing slash or query string", async () => {
@@ -718,13 +716,71 @@ describe("nearest bikeshare endpoint", () => {
     expect(html).not.toContain("icloud.com/shortcuts");
   });
 
-  it("rejects a non-GET request", async () => {
+  it("tells an old GET Shortcut to update", async () => {
     const response = await handleRequest(
-      new Request("https://worker.test/nearest", { method: "POST" }),
+      new Request("https://worker.test/nearest?lat=37.76&lon=-122.42"),
+      dependencies(),
+    );
+    const body = (await response.json()) as JsonRecord;
+
+    expect(response.status).toBe(200);
+    expect(body.selected).toBeNull();
+    expect(body.mapPreviewUrl).toBeNull();
+    expect(body.spokenMessage).toContain("out of date");
+  });
+
+  it("rejects a non-POST lookup", async () => {
+    const response = await handleRequest(
+      new Request("https://worker.test/nearest", { method: "PUT" }),
       dependencies(),
     );
 
     expect(response.status).toBe(405);
+  });
+
+  it("skips walking routes when the request limiter throws", async () => {
+    const { body } = await handleRequestWithOptions({
+      routingResponse: fixture("openrouteservice_matrix.json"),
+      rateLimiter: {
+        async limit() {
+          throw new Error("limiter unavailable");
+        },
+      },
+    });
+
+    expect(body.distanceSource).toBe("straight_line");
+    expect(body.routingProvider).toBeNull();
+    expect(body.selected).not.toBeNull();
+  });
+
+  it("skips walking routes when the routing budget is spent", async () => {
+    const { body } = await handleRequestWithOptions({
+      routingResponse: fixture("openrouteservice_matrix.json"),
+      routingRateLimiter: {
+        async limit() {
+          return { success: false };
+        },
+      },
+    });
+
+    expect(body.distanceSource).toBe("straight_line");
+    expect(body.routingProvider).toBeNull();
+    expect(body.selected).not.toBeNull();
+  });
+
+  it("sends security headers on HTML and JSON", async () => {
+    const page = await handleRequest(
+      new Request("https://worker.test/"),
+      dependencies(),
+    );
+    const json = await handleRequest(nearestRequest(), dependencies());
+
+    expect(page.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(page.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(json.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(json.headers.get("content-security-policy")).toContain(
+      "default-src 'none'",
+    );
   });
 
   it("returns 404 for an unknown path", async () => {
@@ -739,20 +795,23 @@ describe("nearest bikeshare endpoint", () => {
 
 async function handleRequestWithOptions(
   options: FixtureOptions,
-  requestUrl = "https://worker.test/nearest?lat=37.76&lon=-122.42&type=electric",
+  fields: Record<string, unknown> = {},
 ) {
-  const response = await handleRequest(new Request(requestUrl), {
-    ...dependencies(options),
-  });
+  const response = await handleRequest(
+    nearestRequest({ type: "electric", ...fields }),
+    {
+      ...dependencies(options),
+    },
+  );
   return { response, body: (await response.clone().json()) as JsonRecord };
 }
 
 async function handleRequestWithOverrides(
   overrides: Record<string, unknown>,
-  requestUrl = "https://worker.test/nearest?lat=37.76&lon=-122.42&type=any",
+  fields: Record<string, unknown> = {},
 ) {
   const response = await handleRequest(
-    new Request(requestUrl),
+    nearestRequest({ type: "any", ...fields }),
     dependencies({ overrides }),
   );
   return { response, body: (await response.clone().json()) as JsonRecord };

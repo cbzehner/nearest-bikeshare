@@ -9,7 +9,7 @@ The live copy uses `https://nearest-bikeshare.hooks.workers.dev`.
 ## What the Shortcut must do
 
 1. Get the current location once.
-2. `GET WORKER_URL/nearest?lat=…&lon=…&type=any&units=imperial&maps=apple`
+2. `POST WORKER_URL/nearest` as JSON: `{ "lat", "lon", "type": "any", "units": "imperial", "maps": "apple" }`.
 3. Speak `spokenMessage`.
 4. Open `mapPreviewUrl` only when that field has a value.
 
@@ -26,21 +26,20 @@ Use the built-in bicycle symbol and dark blue. [nearest-bikeshare.svg](nearest-b
 1. **Get Current Location** once.
 2. **Get Details of Locations** → `Latitude`, input = that location.
 3. **Get Details of Locations** → `Longitude`, same location.
-4. **Text**:
+4. **Get Contents of URL**.
+   - URL: `WORKER_URL/nearest` (no query string).
+   - Method: `POST`.
+   - Request body: **JSON**.
+   - Fields: `lat` = Latitude, `lon` = Longitude, `type` = `any`, `units` = `imperial`, `maps` = `apple`.
 
-   ```text
-   WORKER_URL/nearest?lat=LATITUDE&lon=LONGITUDE&type=any&units=imperial&maps=apple
-   ```
+   Both location tokens must point at the **Get Current Location** action. If a token says “Variable not available,” the Worker gets empty coordinates.
 
-   Insert the two detail outputs in place of `LATITUDE` and `LONGITUDE`. Both tokens must point at the **Get Current Location** action. If a token says “Variable not available,” the Worker gets empty coordinates.
+   Change `units` to `metric` for meters and kilometers. Change `maps` to `google` for Google Maps. Keep those values in the request. Do not ask for them on each run.
 
-   Change `units=imperial` to `units=metric` for meters and kilometers. Change `maps=apple` to `maps=google` for Google Maps. Keep those values in the URL. Do not ask for them on each run.
-
-5. **Get Contents of URL**. Method `GET`. URL = the Text action.
-6. **Get Dictionary Value** `spokenMessage`.
-7. **Speak Text** that value.
-8. **Get Dictionary Value** `mapPreviewUrl`.
-9. **If** that value **has any value** → **Open URLs**.
+5. **Get Dictionary Value** `spokenMessage`.
+6. **Speak Text** that value.
+7. **Get Dictionary Value** `mapPreviewUrl`.
+8. **If** that value **has any value** → **Open URLs**.
 
 If **Get Contents of URL** reports a network error, run the Shortcut again.
 
