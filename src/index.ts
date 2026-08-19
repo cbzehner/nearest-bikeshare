@@ -30,7 +30,8 @@ const OUT_OF_AREA_SPOKEN_MESSAGE =
   "Nearest Bikeshare only covers Bay Wheels in the San Francisco Bay Area.";
 const OUT_OF_AREA_NOTE =
   "This tool only covers Bay Wheels in the San Francisco Bay Area.";
-const GET_NEAREST_SPOKEN_MESSAGE =
+const SUPPORTED_REQUEST_VERSION = 1;
+const OUTDATED_CLIENT_SPOKEN_MESSAGE =
   "This Shortcut is out of date. Open nearest-bikeshare.hooks.workers.dev and add it again.";
 const SECURITY_HEADERS = {
   "content-security-policy":
@@ -71,6 +72,15 @@ function readCoordinate(value: unknown): number | undefined {
   return undefined;
 }
 
+function readRequestVersion(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed)) return parsed;
+  }
+  return undefined;
+}
+
 function readText(value: unknown, fallback: string): string {
   return typeof value === "string" && value !== "" ? value : fallback;
 }
@@ -105,6 +115,12 @@ async function parseNearestBody(
     };
   }
   const record = payload as Record<string, unknown>;
+  if (readRequestVersion(record.version) !== SUPPORTED_REQUEST_VERSION) {
+    return {
+      error: "outdated_client",
+      message: "Use the current Shortcut.",
+    };
+  }
   const latitude = readCoordinate(record.lat);
   const longitude = readCoordinate(record.lon);
   const type = readText(record.type, "any");
@@ -356,6 +372,19 @@ function landingPage(shareUrl: string | undefined): Response {
   });
 }
 
+function outdatedClientResponse(
+  nowSeconds: number,
+  error: string,
+  message: string,
+): Response {
+  return jsonResponse({
+    ...emptyResponse(fallbackQuery(), unusedFreshness(nowSeconds)),
+    spokenMessage: OUTDATED_CLIENT_SPOKEN_MESSAGE,
+    error,
+    message,
+  });
+}
+
 function unusedFreshness(
   nowSeconds: number,
 ): ReturnType<typeof aggregateFreshness> {
@@ -504,12 +533,11 @@ export async function handleRequest(
     const now = (
       dependencies.nowSeconds ?? (() => Math.floor(Date.now() / 1000))
     )();
-    return jsonResponse({
-      ...emptyResponse(fallbackQuery(), unusedFreshness(now)),
-      spokenMessage: GET_NEAREST_SPOKEN_MESSAGE,
-      error: "method_not_allowed",
-      message: "Use POST /nearest with a JSON body.",
-    });
+    return outdatedClientResponse(
+      now,
+      "method_not_allowed",
+      "Use POST /nearest with a JSON body.",
+    );
   }
   if (request.method !== "POST")
     return errorResponse("method_not_allowed", "Use POST /nearest.", 405);
@@ -541,7 +569,16 @@ export async function handleRequest(
   }
 
   const parsedQuery = await parseNearestBody(request);
-  if (isErrorResponse(parsedQuery)) return jsonResponse(parsedQuery, 400);
+  if (isErrorResponse(parsedQuery)) {
+    if (parsedQuery.error === "outdated_client") {
+      return outdatedClientResponse(
+        nowSeconds,
+        parsedQuery.error,
+        parsedQuery.message,
+      );
+    }
+    return jsonResponse(parsedQuery, 400);
+  }
   if (!isInServiceArea(parsedQuery.latitude, parsedQuery.longitude)) {
     return jsonResponse({
       ...emptyResponse(parsedQuery, unusedFreshness(nowSeconds)),

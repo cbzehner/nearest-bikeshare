@@ -16,7 +16,7 @@ On iPhone, tap **Add Shortcut**, then say “Siri, nearest bikeshare.”
 ## How it works
 
 ```text
-iPhone Shortcut  →  POST /nearest { lat, lon }  →  Worker
+iPhone Shortcut  →  POST /nearest { version, lat, lon }  →  Worker
      ↑                                               |
      speak + open Maps                         GBFS + optional walking routes
 ```
@@ -60,7 +60,7 @@ npm run dev -- --port 8787
 ```sh
 curl -sS -X POST 'http://localhost:8787/nearest' \
   -H 'content-type: application/json' \
-  -d '{"lat":37.7600,"lon":-122.4200,"type":"any"}'
+  -d '{"version":1,"lat":37.7600,"lon":-122.4200,"type":"any"}'
 ```
 
 A Mission District coordinate should return HTTP 200 JSON. A New York coordinate should return a Bay Area-only spoken message. Invalid `lat` should return HTTP 400.
@@ -73,6 +73,7 @@ Walking routes need a local key. Copy [`.env.example`](.env.example) to `.env` a
 
 ```json
 {
+  "version": 1,
   "lat": 37.76,
   "lon": -122.42,
   "type": "any",
@@ -83,20 +84,22 @@ Walking routes need a local key. Copy [`.env.example`](.env.example) to `.env` a
 
 | Field        | Values                       | Default    |
 | ------------ | ---------------------------- | ---------- |
+| `version`    | `1`                          | —          |
 | `lat`, `lon` | Required numbers             | —          |
 | `type`       | `any`, `electric`, `classic` | `any`      |
 | `units`      | `imperial`, `metric`         | `imperial` |
 | `maps`       | `apple`, `google`            | `apple`    |
 
-The live Shortcut sends `type=any`, `units=imperial`, and `maps=apple`. A GET to `/nearest` does not look up a bike. It tells the user to add the current Shortcut.
+The live Shortcut sends `version=1`, `type=any`, `units=imperial`, and `maps=apple`. A GET to `/nearest`, or a POST without `version: 1`, does not look up a bike. It tells the user to add the current Shortcut.
 
 A successful body includes `selected`, `spokenMessage`, `mapPreviewUrl`, `distanceSource`, `topCandidates` (up to five), and feed freshness. `distanceMeters` is always meters. Speech uses feet or miles (imperial) and meters or kilometers (metric), with a switch at 1,000 of the smaller unit.
 
-| Case                                                 | HTTP | What the Shortcut does                                                  |
-| ---------------------------------------------------- | ---- | ----------------------------------------------------------------------- |
-| Bike found                                           | 200  | Speaks the result. Opens Maps.                                          |
-| No bike, out of area, rate limit, or Bay Wheels down | 200  | Speaks `spokenMessage`. `mapPreviewUrl` is empty, so Maps stays closed. |
-| Bad body                                             | 400  | Shortcut sees a request error.                                          |
+| Case                                                  | HTTP | What the Shortcut does                                                  |
+| ----------------------------------------------------- | ---- | ----------------------------------------------------------------------- |
+| Bike found                                            | 200  | Speaks the result. Opens Maps.                                          |
+| No bike, out of area, rate limit, or Bay Wheels down  | 200  | Speaks `spokenMessage`. `mapPreviewUrl` is empty, so Maps stays closed. |
+| Outdated Shortcut (GET, or POST without `version: 1`) | 200  | Speaks the update message. Maps stays closed.                           |
+| Bad body                                              | 400  | Shortcut sees a request error.                                          |
 
 `POST /nearest` allows 10 requests per 60 seconds per client IP. Walking-route calls also have a global cap of 40 per 60 seconds. `/` is not rate-limited.
 

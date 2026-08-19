@@ -9,7 +9,7 @@ The live copy uses `https://nearest-bikeshare.hooks.workers.dev`.
 ## What the Shortcut must do
 
 1. Get the current location once.
-2. `POST WORKER_URL/nearest` as JSON: `{ "lat", "lon", "type": "any", "units": "imperial", "maps": "apple" }`.
+2. `POST WORKER_URL/nearest` as JSON: `{ "version": 1, "lat", "lon", "type": "any", "units": "imperial", "maps": "apple" }`.
 3. Speak `spokenMessage`.
 4. Open `mapPreviewUrl` only when that field has a value.
 
@@ -30,7 +30,7 @@ Use the built-in bicycle symbol and dark blue. [nearest-bikeshare.svg](nearest-b
    - URL: `WORKER_URL/nearest` (no query string).
    - Method: `POST`.
    - Request body: **JSON**.
-   - Fields: `lat` = Latitude, `lon` = Longitude, `type` = `any`, `units` = `imperial`, `maps` = `apple`.
+   - Fields: `version` = `1` (Number), `lat` = Latitude, `lon` = Longitude, `type` = `any`, `units` = `imperial`, `maps` = `apple`.
 
    Both location tokens must point at the **Get Current Location** action. If a token says “Variable not available,” the Worker gets empty coordinates.
 

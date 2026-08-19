@@ -95,6 +95,7 @@ function nearestRequest(fields: Record<string, unknown> = {}): Request {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
+      version: 1,
       lat: 37.76,
       lon: -122.42,
       type: "electric",
@@ -727,6 +728,39 @@ describe("nearest bikeshare endpoint", () => {
     expect(body.selected).toBeNull();
     expect(body.mapPreviewUrl).toBeNull();
     expect(body.spokenMessage).toContain("out of date");
+  });
+
+  it("tells a POST client without version to update", async () => {
+    const { response, body } = await handleRequestWithOptions(
+      { failingFeed: "station_status.json" },
+      { version: undefined },
+    );
+
+    expect(response.status).toBe(200);
+    expect(body.selected).toBeNull();
+    expect(body.mapPreviewUrl).toBeNull();
+    expect(body.error).toBe("outdated_client");
+    expect(body.spokenMessage).toContain("out of date");
+  });
+
+  it("tells a POST client with a newer version to update", async () => {
+    const { response, body } = await handleRequestWithOptions(
+      { failingFeed: "station_status.json" },
+      { version: 2, lat: 91 },
+    );
+
+    expect(response.status).toBe(200);
+    expect(body.selected).toBeNull();
+    expect(body.mapPreviewUrl).toBeNull();
+    expect(body.error).toBe("outdated_client");
+    expect(body.spokenMessage).toContain("out of date");
+  });
+
+  it("accepts version as a numeric string", async () => {
+    const { response, body } = await responseJson({ version: "1" });
+
+    expect(response.status).toBe(200);
+    expect(body.selected).not.toBeNull();
   });
 
   it("rejects a non-POST lookup", async () => {
